@@ -408,6 +408,7 @@ import Cardano.Wallet.Primitive.NetworkId
 import Cardano.Wallet.Primitive.Passphrase.Types
     ( Passphrase (..)
     , PassphraseHash (..)
+    , PassphraseScheme (..)
     )
 import Cardano.Wallet.Primitive.SyncProgress
     ( SyncProgress (..)
@@ -1002,13 +1003,20 @@ data ApiWalletAssetsBalance = ApiWalletAssetsBalance
     deriving (FromJSON, ToJSON) via DefaultRecord ApiWalletAssetsBalance
     deriving anyclass (NFData)
 
-newtype ApiWalletPassphraseInfo = ApiWalletPassphraseInfo
+data ApiWalletPassphraseInfo = ApiWalletPassphraseInfo
     { lastUpdatedAt :: UTCTime
+    , encryptionMethod :: ApiT PassphraseScheme
     }
     deriving (Eq, Generic)
     deriving (FromJSON, ToJSON) via DefaultRecord ApiWalletPassphraseInfo
     deriving anyclass (NFData)
     deriving (Show) via (Quiet ApiWalletPassphraseInfo)
+
+instance ToJSON (ApiT PassphraseScheme) where
+    toJSON = toTextApiT
+
+instance FromJSON (ApiT PassphraseScheme) where
+    parseJSON = fromTextApiT "PassphraseScheme"
 
 data ApiWalletDelegation = ApiWalletDelegation
     { active :: !ApiWalletDelegationNext

@@ -122,7 +122,7 @@ renderPassphrase
     -> Maybe ApiWalletPassphraseInfo
     -> HtmlT m ()
 renderPassphrase _ Nothing = ""
-renderPassphrase showTime (Just ApiWalletPassphraseInfo{..}) =
+renderPassphrase showTime (Just ApiWalletPassphraseInfo{lastUpdatedAt}) =
     toHtml $ showTime lastUpdatedAt
 
 renderPoolGap :: Monad m => ApiT AddressPoolGap -> HtmlT m ()

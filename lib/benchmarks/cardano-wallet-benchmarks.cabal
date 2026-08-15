@@ -66,7 +66,6 @@ library
     , hspec
     , http-client
     , http-types
-    , iohk-monitoring
     , iohk-monitoring-extra
     , JuicyPixels
     , local-cluster
@@ -121,7 +120,6 @@ benchmark restore
     , crypto-primitives
     , filepath
     , fmt
-    , iohk-monitoring
     , iohk-monitoring-extra
     , optparse-applicative
     , say
@@ -162,7 +160,6 @@ benchmark latency
     , hspec
     , http-client
     , http-types
-    , iohk-monitoring
     , iohk-monitoring-extra
     , local-cluster
     , mtl
@@ -209,7 +206,6 @@ benchmark db
     , filepath
     , fmt
     , foldl
-    , iohk-monitoring
     , iohk-monitoring-extra
     , memory
     , mtl
@@ -241,7 +237,6 @@ benchmark api
     , containers
     , filepath
     , fmt
-    , iohk-monitoring
     , iohk-monitoring-extra
     , mtl
     , say

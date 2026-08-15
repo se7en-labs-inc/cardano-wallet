@@ -140,9 +140,15 @@ joinStakePoolDelegationAction
                                         else
                                             Nothing
                         Write.RecentEraDijkstra ->
-                            error
-                                "joinStakePoolDelegationAction: \
-                                \Dijkstra era not yet supported"
+                            if not stakeKeyIsRegistered
+                                then
+                                    Just $ Tx.VoteRegisteringKey Abstain
+                                else
+                                    if votingRequest /= NotVotedThisTime
+                                        then
+                                            Just $ Tx.Vote Abstain
+                                        else
+                                            Nothing
                     )
       where
         stakeKeyIsRegistered =
@@ -189,8 +195,14 @@ guardJoin era knownPools delegation pid mRetirementEpochInfo votedTheSameM = do
             Left (ErrAlreadyDelegatingVoting pid)
         (Write.RecentEraConway, VotedDifferently) ->
             pure ()
-        (Write.RecentEraDijkstra, _) ->
-            error "guardJoin: Dijkstra era not yet supported"
+        (Write.RecentEraDijkstra, NotVotedYet) ->
+            pure ()
+        (Write.RecentEraDijkstra, NotVotedThisTime) ->
+            Left (ErrAlreadyDelegating pid)
+        (Write.RecentEraDijkstra, VotedSameAsBefore) ->
+            Left (ErrAlreadyDelegatingVoting pid)
+        (Write.RecentEraDijkstra, VotedDifferently) ->
+            pure ()
 
 {-----------------------------------------------------------------------------
     Quit stake pool
@@ -278,7 +290,7 @@ joinDRepVotingAction era targetDRep dlg stakeKeyIsRegistered = do
     guardEraIsConway Write.RecentEraConway =
         Right ()
     guardEraIsConway Write.RecentEraDijkstra =
-        error "guardEraIsConway: Dijkstra era not yet supported"
+        Right ()
 
     votingAction =
         if stakeKeyIsRegistered

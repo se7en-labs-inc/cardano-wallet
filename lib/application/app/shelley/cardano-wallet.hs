@@ -26,19 +26,10 @@ import Cardano.BM.Data.Severity
     ( Severity (..)
     )
 import Cardano.BM.Extra
-    ( trMessage
-    , transformTextTrace
+    ( transformTextTrace
     )
-import Cardano.BM.Plugin
-    ( loadPlugin
-    )
-import Cardano.BM.Trace
+import Cardano.BM.Tracing
     ( Trace
-    , appendName
-    , logDebug
-    , logError
-    , logInfo
-    , logNotice
     )
 import Cardano.Launcher.Node
     ( CardanoNodeConn
@@ -79,7 +70,6 @@ import Cardano.Wallet.Application.CLI
     , cmdWallet
     , cmdWalletCreate
     , databaseOption
-    , ekgEnabled
     , enableWindowsANSI
     , helperTracing
     , hostPreferenceOption
@@ -138,16 +128,13 @@ import Control.Exception.Base
     )
 import Control.Monad
     ( void
-    , when
     )
 import Control.Monad.Trans.Except
     ( runExceptT
     )
 import Control.Tracer
     ( contramap
-    )
-import Data.Bifunctor
-    ( second
+    , traceWith
     )
 import Data.Foldable
     ( forM_
@@ -191,7 +178,6 @@ import "optparse-applicative" Options.Applicative
     )
 import Prelude
 
-import qualified Cardano.BM.Backend.EKGView as EKG
 import qualified Cardano.Wallet.Application.Version as V
 import qualified Data.Text as T
 import qualified System.Info as I
@@ -217,7 +203,7 @@ main = withUtf8 $ do
             <> cmdVersion
 
 beforeMainLoop :: Trace IO MainLog -> URI -> IO ()
-beforeMainLoop tr = logInfo tr . MsgListenAddress
+beforeMainLoop tr = traceWith tr . MsgListenAddress
 
 {-------------------------------------------------------------------------------
                             Command - 'serve'
@@ -278,16 +264,16 @@ cmdServe =
                     logOpt
                 ) = withTracers logOpt $ \tr tracers -> do
             withShutdownHandlerMaybe tr enableShutdownHandler $ do
-                logDebug tr $ MsgServeArgs args
+                traceWith tr $ MsgServeArgs args
 
                 (discriminant, netParams, vData, block0) <-
                     runExceptT (parseGenesisData networkConfig) >>= \case
                         Right x -> pure x
                         Left err -> do
-                            logError tr (MsgFailedToParseGenesis $ T.pack err)
+                            traceWith tr (MsgFailedToParseGenesis $ T.pack err)
                             exitWith $ ExitFailure 33
                 forM_ databaseDir
-                    $ setupDirectory (logInfo tr . MsgSetupDatabases)
+                    $ setupDirectory (traceWith tr . MsgSetupDatabases)
 
                 blockchainSource <- case mode of
                     Normal conn syncTolerance ->
@@ -314,9 +300,7 @@ cmdServe =
 
     withShutdownHandlerMaybe :: Trace IO MainLog -> Bool -> IO () -> IO ()
     withShutdownHandlerMaybe _ False = void
-    withShutdownHandlerMaybe tr True = void . withShutdownHandler trShutdown
-      where
-        trShutdown = trMessage $ contramap (second (fmap MsgShutdownHandler)) tr
+    withShutdownHandlerMaybe tr True = void . withShutdownHandler (contramap MsgShutdownHandler tr)
 
 {-------------------------------------------------------------------------------
                                     Logging
@@ -376,14 +360,13 @@ withTracers
     -> (Trace IO MainLog -> Tracers IO -> IO a)
     -> IO a
 withTracers logOpt action =
-    withLogging [LogToStdStreams (loggingMinSeverity logOpt)] $ \(sb, (cfg, tr)) -> do
-        ekgEnabled >>= flip when (EKG.plugin cfg tr sb >>= loadPlugin sb)
-        let trMain = appendName "main" (transformTextTrace tr)
+    withLogging [LogToStdStreams (loggingMinSeverity logOpt)] $ \tr -> do
+        let trMain = transformTextTrace tr
         let tracers = setupTracers (loggingTracers logOpt) tr
-        logInfo trMain $ MsgVersion V.version V.gitRevision I.arch I.os
-        logInfo trMain =<< MsgCmdLine <$> getExecutablePath <*> getArgs
-        installSignalHandlers (logNotice trMain MsgSigTerm)
-        let logInterrupt UserInterrupt = logNotice trMain MsgSigInt
+        traceWith trMain $ MsgVersion V.version V.gitRevision I.arch I.os
+        traceWith trMain =<< MsgCmdLine <$> getExecutablePath <*> getArgs
+        installSignalHandlers (traceWith trMain MsgSigTerm)
+        let logInterrupt UserInterrupt = traceWith trMain MsgSigInt
             logInterrupt _ = pure ()
         action trMain tracers `withException` logInterrupt
 

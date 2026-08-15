@@ -1,9 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
-
--- TODO: Migrate from deprecated Cardano.Api.Certificate to
--- Cardano.Api.Experimental.Certificate
+{-# LANGUAGE TypeApplications #-}
 
 -- |
 -- Copyright: © 2024 Cardano Foundation
@@ -23,9 +20,6 @@ import Cardano.Address.KeyHash
     )
 import Cardano.Address.Script
     ( Script (..)
-    )
-import Cardano.Api.Extra
-    ( CardanoApiEra
     )
 import Cardano.Balance.Tx.Eras
     ( RecentEra (..)
@@ -55,6 +49,7 @@ import Data.ByteString.Short
 import Prelude
 
 import qualified Cardano.Api as Cardano
+import qualified Cardano.Api.Experimental.Certificate as ExpCert
 import qualified Cardano.Api.Ledger as Ledger
 
 {-----------------------------------------------------------------------------
@@ -69,49 +64,64 @@ certificateFromDelegationAction
     -- ^ Optional deposit value
     -> DelegationAction
     -- ^ Delegation action that we plan to take
-    -> [Cardano.Certificate (CardanoApiEra era)]
+    -> [ExpCert.Certificate era]
     -- ^ Certificates representing the action
 certificateFromDelegationAction RecentEraConway cred depositM da =
     case (da, depositM) of
         (Join poolId, _) ->
-            [ Cardano.makeStakeAddressDelegationCertificate
-                $ Cardano.StakeDelegationRequirementsConwayOnwards
-                    conwayWitness
-                    (toCardanoStakeCredential cred)
-                    (toLedgerDelegatee (Just poolId) Nothing)
+            [ ExpCert.makeStakeAddressDelegationCertificate @Cardano.ConwayEra
+                (toCardanoStakeCredential cred)
+                (toLedgerDelegatee (Just poolId) Nothing)
             ]
         (JoinRegisteringKey poolId, Just deposit) ->
-            [ Cardano.makeStakeAddressRegistrationCertificate
-                $ Cardano.StakeAddrRegistrationConway
-                    conwayWitness
-                    (toCardanoLovelace deposit)
-                    (toCardanoStakeCredential cred)
-            , Cardano.makeStakeAddressDelegationCertificate
-                $ Cardano.StakeDelegationRequirementsConwayOnwards
-                    conwayWitness
-                    (toCardanoStakeCredential cred)
-                    (toLedgerDelegatee (Just poolId) Nothing)
+            [ ExpCert.makeStakeAddressRegistrationCertificate @Cardano.ConwayEra
+                (toCardanoStakeCredential cred)
+                (toCardanoLovelace deposit)
+            , ExpCert.makeStakeAddressDelegationCertificate @Cardano.ConwayEra
+                (toCardanoStakeCredential cred)
+                (toLedgerDelegatee (Just poolId) Nothing)
             ]
         (JoinRegisteringKey _, Nothing) ->
             error
                 "certificateFromDelegationAction: deposit value required in \
                 \Conway era when registration is carried out (joining)"
         (Quit, Just deposit) ->
-            [ Cardano.makeStakeAddressUnregistrationCertificate
-                $ Cardano.StakeAddrRegistrationConway
-                    conwayWitness
-                    (toCardanoLovelace deposit)
-                    (toCardanoStakeCredential cred)
+            [ ExpCert.makeStakeAddressUnregistrationCertificate @Cardano.ConwayEra
+                (toCardanoStakeCredential cred)
+                (toCardanoLovelace deposit)
             ]
         (Quit, Nothing) ->
             error
                 "certificateFromDelegationAction: deposit value required in \
                 \Conway era when registration is carried out (quitting)"
-  where
-    conwayWitness = Cardano.ConwayEraOnwardsConway
-certificateFromDelegationAction RecentEraDijkstra _cred _depositM _da =
-    error
-        "certificateFromDelegationAction: Dijkstra era not yet supported"
+certificateFromDelegationAction RecentEraDijkstra cred depositM da =
+    case (da, depositM) of
+        (Join poolId, _) ->
+            [ ExpCert.makeStakeAddressDelegationCertificate @Cardano.DijkstraEra
+                (toCardanoStakeCredential cred)
+                (toLedgerDelegatee (Just poolId) Nothing)
+            ]
+        (JoinRegisteringKey poolId, Just deposit) ->
+            [ ExpCert.makeStakeAddressRegistrationCertificate @Cardano.DijkstraEra
+                (toCardanoStakeCredential cred)
+                (toCardanoLovelace deposit)
+            , ExpCert.makeStakeAddressDelegationCertificate @Cardano.DijkstraEra
+                (toCardanoStakeCredential cred)
+                (toLedgerDelegatee (Just poolId) Nothing)
+            ]
+        (JoinRegisteringKey _, Nothing) ->
+            error
+                "certificateFromDelegationAction: deposit value required in \
+                \Dijkstra era when registration is carried out (joining)"
+        (Quit, Just deposit) ->
+            [ ExpCert.makeStakeAddressUnregistrationCertificate @Cardano.DijkstraEra
+                (toCardanoStakeCredential cred)
+                (toCardanoLovelace deposit)
+            ]
+        (Quit, Nothing) ->
+            error
+                "certificateFromDelegationAction: deposit value required in \
+                \Dijkstra era when registration is carried out (quitting)"
 
 {-----------------------------------------------------------------------------
     Cardano.StakeCredential

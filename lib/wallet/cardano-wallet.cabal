@@ -92,7 +92,6 @@ library
     , http-types
     , int-cast
     , io-classes
-    , iohk-monitoring
     , iohk-monitoring-extra
     , lens
     , list-transformer
@@ -108,9 +107,9 @@ library
     , optparse-applicative
     , ordered-containers
     , ouroboros-consensus
-    , ouroboros-consensus-cardano
+    , ouroboros-consensus:cardano
     , ouroboros-network
-    , ouroboros-network-api
+    , ouroboros-network:api
     , path-pieces
     , persistent
     , persistent-sqlite

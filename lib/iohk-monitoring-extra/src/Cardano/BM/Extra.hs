@@ -17,7 +17,7 @@
 --
 -- This module contains utility functions for logging and mapping trace data.
 module Cardano.BM.Extra
-    ( -- * Conversions from BM framework
+    ( -- * Tracer setup helpers
       trMessage
     , trMessageText
 
@@ -42,13 +42,15 @@ module Cardano.BM.Extra
 
       -- * Tracer conversions
     , flatContramapTracer
+
+      -- * Re-exported types (backwards-compat shim)
+    , module Cardano.BM.Data.LogItem
+    , module Cardano.BM.Data.Severity
+    , module Cardano.BM.Data.Tracer
     ) where
 
 import Cardano.BM.Data.LogItem
-    ( LOContent (..)
-    , LogObject (..)
-    , LoggerName
-    , mkLOMeta
+    ( PrivacyAnnotation (..)
     )
 import Cardano.BM.Data.Severity
     ( Severity (..)
@@ -56,16 +58,13 @@ import Cardano.BM.Data.Severity
 import Cardano.BM.Data.Tracer
     ( HasPrivacyAnnotation (..)
     , HasSeverityAnnotation (..)
-    , Transformable (..)
-    )
-import Cardano.BM.Trace
-    ( Trace
     )
 import Control.DeepSeq
     ( NFData (..)
     )
 import Control.Monad
-    ( when
+    ( forM_
+    , when
     )
 import Control.Monad.Catch
     ( MonadMask
@@ -79,8 +78,9 @@ import Control.Monad.Trans.Except
     , runExceptT
     )
 import Control.Tracer
-    ( Tracer (..)
+    ( Tracer
     , contramap
+    , mkTracer
     , nullTracer
     , traceWith
     )
@@ -95,9 +95,6 @@ import Data.Aeson
     , Value (Null)
     , object
     , (.=)
-    )
-import Data.Foldable
-    ( forM_
     )
 import Data.Functor
     ( ($>)
@@ -144,60 +141,42 @@ import Prelude
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text.Encoding as T
 
--- | Converts a 'Text' trace into any other type of trace that has a 'ToText'
--- instance.
-transformTextTrace :: ToText a => Trace IO Text -> Trace IO a
-transformTextTrace = contramap (fmap . fmap $ toText) . filterNonEmpty
+-- | Converts a plain text tracer to one that accepts any 'ToText' message,
+-- skipping empty conversions.
+transformTextTrace :: ToText a => Tracer IO Text -> Tracer IO a
+transformTextTrace tr = contramap toText $ filterNonEmpty tr
 
--- | Tracer transformer which transforms traced items to their 'ToText'
--- representation and further traces them as a 'LogObject'. If the 'ToText'
--- representation is empty, then no tracing happens.
+-- | Tracer transformer that converts any 'ToText' message to its text
+-- representation and forwards non-empty strings to the given tracer.
 trMessageText
     :: (MonadIO m, ToText a, HasPrivacyAnnotation a, HasSeverityAnnotation a)
-    => Tracer m (LoggerName, LogObject Text)
+    => Tracer m Text
     -> Tracer m a
-trMessageText tr = Tracer $ \arg -> do
+trMessageText tr = mkTracer $ \arg -> do
     let msg = toText arg
-        tracer = if msg == mempty then nullTracer else tr
-    meta <-
-        mkLOMeta (getSeverityAnnotation arg) (getPrivacyAnnotation arg)
-    traceWith tracer (mempty, LogObject mempty meta (LogMessage msg))
+    when (msg /= mempty && getPrivacyAnnotation arg == Public) $ traceWith tr msg
 
--- | Tracer transformer which converts 'Trace m a' to 'Tracer m a' by wrapping
--- typed log messages into a 'LogObject'.
+-- | Tracer transformer that forwards messages as-is to the given tracer.
+-- (In the simplified model there is no LogObject wrapper.)
 trMessage
     :: (MonadIO m, HasPrivacyAnnotation a, HasSeverityAnnotation a)
-    => Tracer m (LoggerName, LogObject a)
+    => Tracer m a
     -> Tracer m a
-trMessage tr = Tracer $ \arg -> do
-    meta <-
-        mkLOMeta (getSeverityAnnotation arg) (getPrivacyAnnotation arg)
-    traceWith tr (mempty, LogObject mempty meta (LogMessage arg))
+trMessage = id
 
-instance
-    forall m a
-     . (MonadIO m, ToText a, HasPrivacyAnnotation a, HasSeverityAnnotation a)
-    => Transformable Text m a
-    where
-    trTransformer _verb = Tracer . traceWith . trMessageText
-
--- | Trace transformer which removes empty traces.
+-- | Filter a text tracer, dropping empty strings.
 filterNonEmpty
-    :: forall m a
-     . (Monad m, Monoid a, Eq a)
-    => Trace m a
-    -> Trace m a
-filterNonEmpty tr = Tracer $ \arg -> do
-    when (nonEmptyMessage $ loContent $ snd arg)
-        $ traceWith tr arg
-  where
-    nonEmptyMessage (LogMessage msg) = msg /= mempty
-    nonEmptyMessage _ = True
+    :: forall m
+     . Monad m
+    => Tracer m Text
+    -> Tracer m Text
+filterNonEmpty tr = mkTracer $ \t ->
+    when (t /= mempty) $ traceWith tr t
 
 -- | Creates a tracer that prints any 'ToText' log message. This is useful for
 -- debugging functions in the REPL, when you need a 'Tracer' object.
 stdoutTextTracer :: (MonadIO m, ToText a) => Tracer m a
-stdoutTextTracer = Tracer $ liftIO . B8.putStrLn . T.encodeUtf8 . toText
+stdoutTextTracer = mkTracer $ liftIO . B8.putStrLn . T.encodeUtf8 . toText
 
 {-------------------------------------------------------------------------------
                                 Logging helpers
@@ -327,7 +306,7 @@ buildBracketLog toBuilder = \case
 
 instance HasPrivacyAnnotation (BracketLog' r)
 instance HasSeverityAnnotation (BracketLog' r) where
-    -- \| Default severities for 'BracketLog' - the enclosing log message may of
+    -- | Default severities for 'BracketLog' - the enclosing log message may of
     -- course use different values.
     getSeverityAnnotation = \case
         BracketStart -> Debug
@@ -416,8 +395,8 @@ fiddleOutcome
     :: Monad m
     => Tracer m (ctx, DiffTime)
     -> Tracer m (Either (ctx, BracketLog) (OutcomeFidelity (ctx, DiffTime)))
-fiddleOutcome tr = Tracer $ \case
-    Right (ProgressedNormally dt) -> runTracer tr dt
+fiddleOutcome tr = mkTracer $ \case
+    Right (ProgressedNormally dt) -> traceWith tr dt
     _ -> pure ()
 
 -- | Simplified wrapper for 'mkOutcomeExtractor'. This produces a timings
@@ -453,4 +432,4 @@ flatContramapTracer
     => (a -> Maybe b)
     -> Tracer m b
     -> Tracer m a
-flatContramapTracer p tr = Tracer $ \a -> forM_ (p a) (runTracer tr)
+flatContramapTracer p tr = mkTracer $ \a -> forM_ (p a) (traceWith tr)

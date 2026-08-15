@@ -67,7 +67,7 @@ library
     , http-media
     , http-types
     , int-cast
-    , iohk-monitoring
+    , iohk-monitoring-extra
     , memory
     , mtl
     , network-uri

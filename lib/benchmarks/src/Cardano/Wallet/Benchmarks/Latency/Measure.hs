@@ -16,24 +16,6 @@ module Cardano.Wallet.Benchmarks.Latency.Measure
     , meanAvg
     ) where
 
-import Cardano.BM.Backend.Switchboard
-    ( effectuate
-    )
-import Cardano.BM.Configuration.Static
-    ( defaultConfigStdout
-    )
-import Cardano.BM.Data.LogItem
-    ( LOContent (..)
-    , LOMeta (..)
-    , LogObject (..)
-    )
-import Cardano.BM.Data.Severity
-    ( Severity (..)
-    )
-import Cardano.BM.Setup
-    ( setupTrace_
-    , shutdown
-    )
 import Control.Monad
     ( replicateM_
     )
@@ -68,20 +50,15 @@ import Network.Wai.Middleware.Logging
     ( ApiLog (..)
     , HandlerLog (..)
     )
-import UnliftIO.Exception
-    ( bracket
-    , onException
-    )
 import UnliftIO.STM
     ( TVar
     , atomically
+    , modifyTVar
     , newTVarIO
     , readTVarIO
     , writeTVar
     )
 import Prelude
-
-import qualified Cardano.BM.Configuration.Model as CM
 
 meanAvg :: [NominalDiffTime] -> Double
 meanAvg ts = sum (map realToFrac ts) * 1000 / fromIntegral (length ts)
@@ -131,7 +108,7 @@ measureLatency count start finish capture action = do
     (logs, ()) <- capture $ replicateM_ count action
     pure $ extractTimings start finish logs
 
--- | Scan through iohk-monitoring logs and extract time differences between
+-- | Scan through captured logs and extract time differences between
 -- start and end messages.
 extractTimings
     :: forall a
@@ -140,8 +117,8 @@ extractTimings
     -- ^ Predicate for start message
     -> (a -> Bool)
     -- ^ Predicate for end message
-    -> [LogObject a]
-    -- ^ Log messages
+    -> [(UTCTime, a)]
+    -- ^ Timestamped log messages
     -> [NominalDiffTime]
 extractTimings isStart isFinish msgs =
     map2 mkDiff
@@ -150,64 +127,37 @@ extractTimings isStart isFinish msgs =
             else error "start trace without matching finish trace"
   where
     map2
-        :: ( (Bool, UTCTime, LOContent a)
-             -> (Bool, UTCTime, LOContent a)
-             -> NominalDiffTime
-           )
-        -> [(Bool, UTCTime, LOContent a)]
+        :: ((Bool, UTCTime) -> (Bool, UTCTime) -> NominalDiffTime)
+        -> [(Bool, UTCTime)]
         -> [NominalDiffTime]
     map2 _ [] = []
-    map2 f (a : b : xs) = (f a b : map2 f xs)
+    map2 f (a : b : xs) = f a b : map2 f xs
     map2 _ _ = error "start trace without matching finish trace"
 
-    mkDiff
-        :: (Bool, UTCTime, LOContent a)
-        -> (Bool, UTCTime, LOContent a)
-        -> NominalDiffTime
-    mkDiff (False, start, _) (True, finish, _) = diffUTCTime finish start
-    mkDiff (False, _time, logContent) _ =
-        error $ "Missing finish trace for " <> show logContent
-    mkDiff (True, _time, logContent) _ =
-        error $ "Missing start trace for " <> show logContent
+    mkDiff :: (Bool, UTCTime) -> (Bool, UTCTime) -> NominalDiffTime
+    mkDiff (False, start) (True, finish) = diffUTCTime finish start
+    mkDiff (False, _) _ = error "Missing finish trace"
+    mkDiff (True, _) _ = error "Missing start trace"
 
-    filtered :: [(Bool, UTCTime, LOContent a)]
+    filtered :: [(Bool, UTCTime)]
     filtered = mapMaybe filterMsg msgs
 
-    filterMsg :: LogObject a -> Maybe (Bool, UTCTime, LOContent a)
-    filterMsg logObj = do
-        let content = loContent logObj
-        case content of
-            LogMessage msg
-                | isStart msg ->
-                    Just (False, getTimestamp logObj, content)
-            LogMessage msg
-                | isFinish msg ->
-                    Just (True, getTimestamp logObj, content)
-            _logMessage -> Nothing
+    filterMsg :: (UTCTime, a) -> Maybe (Bool, UTCTime)
+    filterMsg (t, msg)
+        | isStart msg = Just (False, t)
+        | isFinish msg = Just (True, t)
+        | otherwise = Nothing
 
-    getTimestamp :: LogObject a -> UTCTime
-    getTimestamp = tstamp . loMeta
-
-type LogCaptureFunc msg b = IO b -> IO ([LogObject msg], b)
+type LogCaptureFunc msg b = IO b -> IO ([(UTCTime, msg)], b)
 
 withLatencyLogging
-    :: (TVar [LogObject ApiLog] -> tracers)
+    :: (TVar [(UTCTime, ApiLog)] -> tracers)
     -> ContT r IO (tracers, LogCaptureFunc ApiLog b)
 withLatencyLogging setupTracers = do
-    cfg <- do
-        cfg <- liftIO defaultConfigStdout
-        liftIO $ CM.setMinSeverity cfg Debug
-        pure cfg
     tvar <- liftIO $ newTVarIO []
-    (_, sb) <-
-        ContT
-            $ bracket (setupTrace_ cfg "bench-latency") (shutdown . snd)
-    ContT $ \k ->
-        k (setupTracers tvar, logCaptureFunc tvar) `onException` do
-            fmtLn "Action failed. Here are the captured logs:"
-            readTVarIO tvar >>= mapM_ (effectuate sb) . reverse
+    pure (setupTracers tvar, logCaptureFunc tvar)
 
-logCaptureFunc :: TVar [LogObject ApiLog] -> LogCaptureFunc ApiLog b
+logCaptureFunc :: TVar [(UTCTime, a)] -> LogCaptureFunc a b
 logCaptureFunc tvar action = do
     atomically $ writeTVar tvar []
     res <- action

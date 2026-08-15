@@ -586,7 +586,7 @@ prop_signTransaction_addsExtraKeyWitnesses
                 alonzoOnwards = case recentEra of
                     Write.RecentEraConway -> Cardano.AlonzoEraOnwardsConway
                     Write.RecentEraDijkstra ->
-                        error "alonzoOnwards: Dijkstra not yet supported"
+                        Cardano.AlonzoEraOnwardsDijkstra
 
                 era = cardanoEraFromRecentEra recentEra
 
@@ -805,7 +805,7 @@ prop_signTransaction_addsTxInCollateralWitnesses
                 alonzoOnwards = case recentEra of
                     Write.RecentEraConway -> Cardano.AlonzoEraOnwardsConway
                     Write.RecentEraDijkstra ->
-                        error "alonzoOnwards: Dijkstra not yet supported"
+                        Cardano.AlonzoEraOnwardsDijkstra
 
                 era = cardanoEraFromRecentEra recentEra
 
@@ -1387,7 +1387,7 @@ unsafeWithShelleyBasedEra era a = case era of
     ConwayEra ->
         Cardano.shelleyBasedEraConstraints Cardano.ShelleyBasedEraConway a
     DijkstraEra ->
-        error "unsafeWithShelleyBasedEra: DijkstraEra not yet supported"
+        Cardano.shelleyBasedEraConstraints Cardano.ShelleyBasedEraDijkstra a
 
 --------------------------------------------------------------------------------
 

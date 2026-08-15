@@ -22,9 +22,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
--- TODO: Migrate from deprecated Cardano.Api.Certificate to
--- Cardano.Api.Experimental.Certificate
-
 {- HLINT ignore "Use <$>" -}
 {- HLINT ignore "Use camelCase" -}
 
@@ -258,7 +255,6 @@ import qualified Cardano.Address.Script as CA
 import qualified Cardano.Address.Style.Shelley as CA
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Byron as Byron
-import qualified Cardano.Api.Certificate as ApiCert
 import qualified Cardano.Api.Experimental.Certificate as ExpCert
 import qualified Cardano.Balance.Tx.Eras as Write
 import qualified Cardano.Balance.Tx.Primitive as BT
@@ -311,7 +307,7 @@ data TxPayload era = TxPayload
     { _metadata :: Maybe Cardano.TxMetadata
     -- ^ User or application-defined metadata to be included in the
     -- transaction.
-    , _certificates :: [Cardano.Certificate (CardanoApiEra era)]
+    , _certificates :: [ExpCert.Certificate era]
     -- ^ Certificates to be included in the transactions.
     , _extraWitnesses :: Cardano.TxBody era -> [Cardano.KeyWitness era]
     -- ^ Create payload-specific witnesses given the unsigned transaction body.
@@ -324,7 +320,7 @@ constructUnsignedTx
     :: forall era
      . Write.IsRecentEra era
     => Cardano.NetworkId
-    -> (Maybe Cardano.TxMetadata, [Cardano.Certificate (CardanoApiEra era)])
+    -> (Maybe Cardano.TxMetadata, [ExpCert.Certificate era])
     -> (Maybe SlotNo, SlotNo)
     -- ^ Slot at which the transaction will optionally start and expire.
     -> Withdrawal
@@ -713,7 +709,12 @@ withRecentEraLedgerTx (InAnyCardanoEra era tx) f = case era of
     Cardano.ByronEra ->
         Nothing
     Cardano.DijkstraEra ->
-        error "withRecentEraLedgerTx: DijkstraEra not yet supported"
+        Just
+            . InAnyCardanoEra era
+            . toCardanoApiTx
+            . f
+            . fromCardanoApiTx
+            $ tx
 
 -- | Construct a standard unsigned transaction.
 --
@@ -883,7 +884,7 @@ mkUnsignedTx
     -> Either PreSelection (SelectionOf TxOut)
     -> Maybe Cardano.TxMetadata
     -> [(Cardano.StakeAddress, Write.Coin)]
-    -> [Cardano.Certificate (CardanoApiEra era)]
+    -> [ExpCert.Certificate era]
     -> Write.Coin
     -> TokenMap
     -> TokenMap
@@ -974,10 +975,10 @@ mkUnsignedTx
                                 let
                                     ctx = Cardano.BuildTxWith Nothing
                                 in
-                                    Cardano.TxCertificates shelleyEra
-                                        $ OMap.fromList
-                                        $ map certToLedger certs
-                                        <&> (,ctx)
+                                    cardanoApiEraConstraints era
+                                        $ Cardano.TxCertificates shelleyEra
+                                            $ OMap.fromList
+                                            $ certs <&> (,ctx)
                             Just stakingScript ->
                                 let
                                     buildKey =
@@ -992,10 +993,10 @@ mkUnsignedTx
                                     witPair = Just (buildKey, buildVal)
                                     ctx = Cardano.BuildTxWith witPair
                                 in
-                                    Cardano.TxCertificates shelleyEra
-                                        $ OMap.fromList
-                                        $ map certToLedger certs
-                                        <&> (,ctx)
+                                    cardanoApiEraConstraints era
+                                        $ Cardano.TxCertificates shelleyEra
+                                            $ OMap.fromList
+                                            $ certs <&> (,ctx)
                         , Cardano.txFee = Cardano.TxFeeExplicit shelleyEra fees
                         , Cardano.txValidityLowerBound =
                             case fst ttl of
@@ -1104,8 +1105,7 @@ mkUnsignedTx
                 (CardanoApiEra era)
         scriptWitsSupported = case era of
             RecentEraConway -> Cardano.SimpleScriptInConway
-            RecentEraDijkstra ->
-                error "scriptWitsSupported: Dijkstra era not yet supported"
+            RecentEraDijkstra -> Cardano.SimpleScriptInDijkstra
 
         toScriptWitness
             :: Script KeyHash
@@ -1151,20 +1151,17 @@ mkUnsignedTx
         allegraOnwards :: Cardano.AllegraEraOnwards (CardanoApiEra era)
         allegraOnwards = case era of
             RecentEraConway -> Cardano.AllegraEraOnwardsConway
-            RecentEraDijkstra ->
-                error "allegraOnwards: Dijkstra era not yet supported"
+            RecentEraDijkstra -> Cardano.AllegraEraOnwardsDijkstra
 
         maryOnwards :: Cardano.MaryEraOnwards (CardanoApiEra era)
         maryOnwards = case era of
             RecentEraConway -> Cardano.MaryEraOnwardsConway
-            RecentEraDijkstra ->
-                error "maryOnwards: Dijkstra era not yet supported"
+            RecentEraDijkstra -> Cardano.MaryEraOnwardsDijkstra
 
         babbageOnwards :: Cardano.BabbageEraOnwards (CardanoApiEra era)
         babbageOnwards = case era of
             RecentEraConway -> Cardano.BabbageEraOnwardsConway
-            RecentEraDijkstra ->
-                error "babbageOnwards: Dijkstra era not yet supported"
+            RecentEraDijkstra -> Cardano.BabbageEraOnwardsDijkstra
 
 -- TODO: ADP-2257
 -- cardano-node does not allow to construct tx without inputs at this moment.
@@ -1187,8 +1184,15 @@ removeDummyInput = case Write.recentEra @era of
                 scriptData
                 aux
                 val
-    RecentEraDijkstra ->
-        error "removeDummyInput: Dijkstra era not yet supported"
+    RecentEraDijkstra -> \case
+        Cardano.ShelleyTxBody sbe body scripts scriptData aux val ->
+            Cardano.ShelleyTxBody
+                sbe
+                (over inputsTxBodyL (Set.delete (toLedger dummyInput)) body)
+                scripts
+                scriptData
+                aux
+                val
 
 mkWithdrawals
     :: NetworkId
@@ -1219,14 +1223,6 @@ mkShelleyWitness body key =
             $ Cardano.PaymentExtendedSigningKey
             $ Crypto.HD.xPrvChangePass pwd BS.empty xprv
 
-certToLedger
-    :: Cardano.Certificate era
-    -> ExpCert.Certificate (Cardano.ShelleyLedgerEra era)
-certToLedger (ApiCert.ShelleyRelatedCertificate w txCert) =
-    Cardano.shelleyToBabbageEraConstraints w $ ExpCert.Certificate txCert
-certToLedger (ApiCert.ConwayCertificate w txCert) =
-    Cardano.conwayEraOnwardsConstraints w $ ExpCert.Certificate txCert
-
 mkByronWitness
     :: forall era
      . Write.IsRecentEra era
@@ -1253,8 +1249,7 @@ mkByronWitness
         era = Write.recentEra @era
         txHash = case era of
             RecentEraConway -> Crypto.castHash $ Crypto.hashWith serialize' body
-            RecentEraDijkstra ->
-                error "mkByronWitness: Dijkstra era not yet supported"
+            RecentEraDijkstra -> Crypto.castHash $ Crypto.hashWith serialize' body
 
         unencrypt (xprv, pwd) =
             CC.SigningKey
@@ -1332,7 +1327,7 @@ txConstraints protocolParams witnessTag =
         constantTxFee <> estimateTxCost' feePerByte empty
 
     constantTxFee =
-        Convert.toWallet $ protocolParams ^. Ledger.ppMinFeeBL
+        Convert.toWallet $ protocolParams ^. Ledger.ppTxFeeFixedL
 
     feePerByte = Write.getFeePerByte protocolParams
 
@@ -1354,7 +1349,7 @@ txConstraints protocolParams witnessTag =
     txOutputMaximumSize =
         (<>)
             (txOutputSize mempty)
-            (TxSize (protocolParams ^. Ledger.ppMaxValSizeL))
+            (TxSize (fromIntegral (protocolParams ^. Ledger.ppMaxValSizeL)))
 
     txOutputMaximumTokenQuantity =
         TokenQuantity $ fromIntegral $ maxBound @Word64
@@ -1425,8 +1420,7 @@ txConstraints protocolParams witnessTag =
     mkLedgerTxOut address bundle =
         case era of
             Write.RecentEraConway -> Convert.toConwayTxOut txOut
-            Write.RecentEraDijkstra ->
-                error "mkLedgerTxOut: Dijkstra era not yet supported"
+            Write.RecentEraDijkstra -> Convert.toDijkstraTxOut txOut
       where
         txOut = TxOut address bundle
 

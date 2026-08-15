@@ -93,7 +93,7 @@ import Cardano.Ledger.Core qualified as L
 
 mkAlonzoTx
     :: TxParameters
-    -> L.Tx AlonzoEra
+    -> L.Tx L.TopTx AlonzoEra
 mkAlonzoTx TxParameters{txInputs, txOutputs} =
     MkAlonzoTx $ AlonzoTx (body txInputs txOutputs) wits valid aux
 
@@ -109,7 +109,7 @@ aux = maybeToStrictMaybe Nothing
 body
     :: NonEmpty (Index, TxId)
     -> NonEmpty (Address, Lovelace)
-    -> L.TxBody AlonzoEra
+    -> L.TxBody L.TopTx AlonzoEra
 body ins outs =
     AlonzoTxBody
         (txins ins)
@@ -143,7 +143,7 @@ auxhash = SNothing
 integrity :: StrictMaybe ScriptIntegrityHash
 integrity = SNothing
 
-whash :: Set (KeyHash 'Witness)
+whash :: Set (KeyHash Guard)
 whash = mempty
 
 collateralIns :: Set TxIn
@@ -152,5 +152,5 @@ collateralIns = mempty
 mint :: MultiAsset
 mint = mempty
 
-exampleAlonzoTx :: L.Tx AlonzoEra
+exampleAlonzoTx :: L.Tx L.TopTx AlonzoEra
 exampleAlonzoTx = mkAlonzoTx exampleTxParameters

@@ -26,6 +26,7 @@
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 {-# HLINT ignore "Avoid NonEmpty.unzip" #-}
 
@@ -2254,13 +2255,7 @@ readNodeTipStateForTxWrite netLayer = do
             throwIO
                 $ ExceptionWriteTxEra
                 $ ErrNodeNotYetInRecentEra nopp
-        Right pp@(Write.PParamsInAnyRecentEra era _) ->
-            case era of
-                Write.RecentEraDijkstra ->
-                    throwIO
-                        $ ExceptionWriteTxEra
-                        $ ErrEraNotYetSupported "Dijkstra"
-                _ -> pure (pp, timeTranslation)
+        Right pp -> pure (pp, timeTranslation)
 
 -- | Filter protocol parameters for recent eras.
 pparamsInRecentEra
@@ -2351,10 +2346,7 @@ balanceTx wrk pp timeTranslation partialTx = do
         -> IO (Write.UTxO era)
     forceUTxOToEra = \case
         InRecentEraConway utxo -> hoist $ Write.forceUTxOToEra utxo
-        InRecentEraDijkstra _ ->
-            throwIO
-                $ ExceptionWriteTxEra
-                $ ErrEraNotYetSupported "Dijkstra"
+        InRecentEraDijkstra utxo -> hoist $ Write.forceUTxOToEra utxo
         InNonRecentEraBabbage -> impossibleRollback
         InNonRecentEraAlonzo -> impossibleRollback
         InNonRecentEraMary -> impossibleRollback
@@ -3988,8 +3980,7 @@ utxoIndexFromWalletUTxO utxo =
     Write.constructUTxOIndex
         $ case Write.recentEra :: Write.RecentEra era of
             Write.RecentEraConway -> Convert.toLedgerUTxOConway utxo
-            Write.RecentEraDijkstra ->
-                error "utxoIndexFromWalletUTxO: Dijkstra era not yet supported"
+            Write.RecentEraDijkstra -> Convert.toLedgerUTxODijkstra utxo
 
 {-------------------------------------------------------------------------------
                                    Errors

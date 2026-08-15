@@ -13,6 +13,10 @@ module Cardano.Wallet.Primitive.Ledger.Read.Tx.Features.Withdrawals
     )
 where
 
+import Cardano.Ledger.Address
+    ( AccountAddress (..)
+    , AccountId (..)
+    )
 import Cardano.Read.Ledger.Tx.Withdrawals
     ( Withdrawals (..)
     )
@@ -31,7 +35,6 @@ import Data.Map.Strict
     )
 import Prelude
 
-import qualified Cardano.Ledger.Api as Ledger
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Wallet.Primitive.Ledger.Convert as Ledger
 import qualified Cardano.Wallet.Primitive.Ledger.Read.Tx.Features.Certificates as Certificates
@@ -56,9 +59,9 @@ getWithdrawals = case theEra @era of
         Just $ fromLedgerWithdrawals withdrawals
 
 fromLedgerWithdrawals
-    :: Map Ledger.RewardAccount Ledger.Coin -> Map RewardAccount W.Coin
+    :: Map AccountAddress Ledger.Coin -> Map RewardAccount W.Coin
 fromLedgerWithdrawals withdrawals =
     Map.fromList
         [ (Certificates.fromStakeCredential cred, Ledger.toWalletCoin coin)
-        | (Ledger.RewardAccount _network cred, coin) <- Map.toList withdrawals
+        | (AccountAddress { aaId = AccountId cred }, coin) <- Map.toList withdrawals
         ]

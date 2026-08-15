@@ -256,6 +256,7 @@ data ApiErrorInfo
     | TranslationByronTxOutInContext
     | BalanceTxInlinePlutusV3ScriptNotSupportedInBabbage
     | BalanceTxInlinePlutusV4ScriptNotSupportedInConway
+    | BalanceTxGuardNativeScriptNotSupportedInConway
     | UnsupportedEra !ApiErrorUnsupportedEra
     deriving (Eq, Generic, Show, Data)
     deriving anyclass (NFData)

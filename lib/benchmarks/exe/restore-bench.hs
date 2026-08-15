@@ -255,7 +255,8 @@ import Control.Monad.Trans.Except
     , withExceptT
     )
 import Control.Tracer
-    ( Tracer (..)
+    ( Tracer
+    , mkTracer
     , traceWith
     )
 import Cryptography.Hash.Blake
@@ -520,7 +521,7 @@ cardanoRestoreBench
     -> IO ()
 cardanoRestoreBench bn ttr tr c socketFile = do
     (networkId, np, vData, _b) <- unsafeRunExceptT $ parseGenesisData c
-    (_, walletTr) <- initBenchmarkLogging "wallet" Notice
+    walletTr <- initBenchmarkLogging "wallet" Notice
 
     withSNetworkId networkId $ \(sNetwork :: SNetworkId n) -> do
         let network = networkDiscriminantVal sNetwork
@@ -1153,7 +1154,7 @@ withWalletLayerTracer benchname pipelining traceToDisk act = do
                 $ \h -> do
                     -- Use a custom tracer to output (time, blockHeight) to a file
                     -- each time we apply blocks.
-                    let fileTr = Tracer $ \msg -> do
+                    let fileTr = mkTracer $ \msg -> do
                             liftIO . B8.hPut h . T.encodeUtf8 . (<> "\n") $ msg
                             hFlush h
                     act $ traceBlockHeadersProgressForPlotting t0 fileTr
@@ -1181,7 +1182,7 @@ traceBlockHeadersProgressForPlotting
     :: UTCTime
     -> Tracer IO Text
     -> Tracer IO (Maybe Read.BlockNo)
-traceBlockHeadersProgressForPlotting t0 tr = Tracer $ \bs -> do
+traceBlockHeadersProgressForPlotting t0 tr = mkTracer $ \bs -> do
     let mtip = Read.prettyBlockNo <$> bs
     time <- pretty . (`diffUTCTime` t0) <$> getCurrentTime
     case mtip of

@@ -140,7 +140,7 @@ scripthashStakeAddressPrefix = 0xF0
 --
 -- Unlike with Jörmungandr, the reward account payload doesn't represent a
 -- public key but a HASH of a public key.
-fromStakeCredential :: SL.Credential 'SL.Staking -> W.RewardAccount
+fromStakeCredential :: SL.Credential SL.Staking -> W.RewardAccount
 fromStakeCredential = \case
     SL.ScriptHashObj (SL.ScriptHash h) ->
         W.FromScriptHash (hashToBytes h)
@@ -180,10 +180,10 @@ shelleyDecodeStakeAddress serverNetwork txt = do
     (_, dp) <- left (const errBech32) $ Bech32.decodeLenient txt
     bytes <- maybe (Left errBech32) Right $ dataPartToBytes dp
     rewardAcnt <-
-        SL.decodeRewardAccount bytes
+        SL.decodeAccountAddress bytes
             & left (TextDecodingError . show @String) . reportFailure
-    guardNetwork (SL.raNetwork rewardAcnt) serverNetwork
-    pure $ fromStakeCredential $ SL.raCredential rewardAcnt
+    guardNetwork (SL.aaNetworkId rewardAcnt) serverNetwork
+    pure $ fromStakeCredential $ SL.unAccountId (SL.aaId rewardAcnt)
   where
     errBech32 =
         TextDecodingError

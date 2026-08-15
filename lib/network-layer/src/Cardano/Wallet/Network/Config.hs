@@ -38,7 +38,7 @@ import Control.Monad.Trans.Except
 import Ouroboros.Network.Magic
     ( NetworkMagic (..)
     )
-import Ouroboros.Network.NodeToClient
+import Cardano.Network.NodeToClient
     ( NodeToClientVersionData (..)
     )
 import Prelude

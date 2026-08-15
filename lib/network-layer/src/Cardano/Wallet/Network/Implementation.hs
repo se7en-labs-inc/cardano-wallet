@@ -327,7 +327,7 @@ import Ouroboros.Network.Mux
     , RunMiniProtocol (..)
     , RunMiniProtocolWithMinimalCtx
     )
-import Ouroboros.Network.NodeToClient
+import Cardano.Network.NodeToClient
     ( ConnectionId (..)
     , Handshake
     , LocalAddress

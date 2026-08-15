@@ -26,7 +26,14 @@ library
 
   hs-source-dirs:     src
   exposed-modules:
+    Cardano.BM.Data.LogItem
+    Cardano.BM.Data.Output
+    Cardano.BM.Data.Severity
+    Cardano.BM.Data.Tracer
     Cardano.BM.Extra
+    Cardano.BM.Trace
+    Cardano.BM.Tracer
+    Cardano.BM.Tracing
     Cardano.BM.ToTextTracer
 
   build-depends:
@@ -38,7 +45,6 @@ library
     , exceptions
     , filepath
     , fmt
-    , iohk-monitoring
     , stm
     , text
     , text-class

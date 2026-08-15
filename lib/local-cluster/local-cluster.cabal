@@ -131,7 +131,6 @@ library
     , insert-ordered-containers
     , int-cast
     , io-classes
-    , iohk-monitoring
     , iohk-monitoring-extra
     , lens
     , lens-aeson
@@ -143,7 +142,7 @@ library
     , openapi3
     , optparse-applicative
     , ouroboros-network
-    , ouroboros-network-api
+    , ouroboros-network:api
     , pathtype
     , profunctors
     , QuickCheck
@@ -257,7 +256,7 @@ common test-common
     , local-cluster:local-cluster-process
     , mtl
     , openapi3
-    , ouroboros-consensus-cardano
+    , ouroboros-consensus:cardano
     , ouroboros-network
     , pathtype
     , QuickCheck

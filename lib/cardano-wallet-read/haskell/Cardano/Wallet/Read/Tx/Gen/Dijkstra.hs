@@ -11,8 +11,7 @@ import Cardano.Ledger.Alonzo
     ( AlonzoTxAuxData
     )
 import Cardano.Ledger.Alonzo.Tx
-    ( AlonzoTx (AlonzoTx)
-    , IsValid (..)
+    ( IsValid (..)
     , ScriptIntegrityHash
     )
 import Cardano.Ledger.Api
@@ -41,7 +40,11 @@ import Cardano.Ledger.Credential
     ( Credential
     )
 import Cardano.Ledger.Dijkstra.Tx
-    ( Tx (MkDijkstraTx)
+    ( DijkstraTx (DijkstraTx)
+    , Tx (MkDijkstraTx)
+    )
+import Cardano.Ledger.Dijkstra.Scripts
+    ( AccountBalanceIntervals (..)
     )
 import Cardano.Ledger.Dijkstra.TxBody
     ( TxBody (DijkstraTxBody)
@@ -110,9 +113,9 @@ import Cardano.Ledger.Core qualified as L
 -- | Create a minimal Dijkstra era transaction from parameters.
 mkDijkstraTx
     :: TxParameters
-    -> L.Tx DijkstraEra
+    -> L.Tx L.TopTx DijkstraEra
 mkDijkstraTx TxParameters{txInputs, txOutputs} =
-    MkDijkstraTx $ AlonzoTx (body txInputs txOutputs) wits valid aux
+    MkDijkstraTx $ DijkstraTx (body txInputs txOutputs) wits valid aux
 
 valid :: IsValid
 valid = IsValid True
@@ -126,7 +129,7 @@ aux = SNothing
 body
     :: NonEmpty (Index, TxId)
     -> NonEmpty (Address, Lovelace)
-    -> L.TxBody DijkstraEra
+    -> L.TxBody L.TopTx DijkstraEra
 body ins outs =
     DijkstraTxBody
         (txins ins)
@@ -148,6 +151,9 @@ body ins outs =
         proposalProcedures
         mempty
         mempty
+        mempty
+        mempty
+        (AccountBalanceIntervals mempty)
 
 collateralReturn
     :: StrictMaybe (Sized (BabbageTxOut DijkstraEra))
@@ -159,7 +165,7 @@ proposalProcedures = mempty
 votingProcedures :: VotingProcedures DijkstraEra
 votingProcedures = VotingProcedures mempty
 
-guards :: OSet (Credential 'Guard)
+guards :: OSet (Credential Guard)
 guards = mempty
 
 certs :: OSet (DijkstraTxCert DijkstraEra)

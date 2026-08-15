@@ -7,32 +7,6 @@ module Cardano.LauncherSpec
     ( spec
     ) where
 
-import Cardano.BM.Configuration.Model
-    ( setMinSeverity
-    )
-import Cardano.BM.Configuration.Static
-    ( defaultConfigStdout
-    )
-import Cardano.BM.Data.LogItem
-    ( LOContent (LogMessage)
-    , LogObject (..)
-    , LoggerName
-    , mkLOMeta
-    )
-import Cardano.BM.Data.Severity
-    ( Severity (..)
-    )
-import Cardano.BM.Data.Tracer
-    ( HasPrivacyAnnotation (..)
-    , HasSeverityAnnotation (..)
-    )
-import Cardano.BM.Setup
-    ( setupTrace_
-    , shutdown
-    )
-import Cardano.BM.Trace
-    ( logDebug
-    )
 import Cardano.Launcher
     ( Command (..)
     , IfToSendSigINT (DoNotSendSigINT)
@@ -46,27 +20,20 @@ import Cardano.Launcher
 import Control.Monad
     ( forever
     )
-import Control.Monad.IO.Class
-    ( MonadIO (..)
-    )
 import Control.Retry
     ( constantDelay
     , limitRetriesByCumulativeDelay
     , recoverAll
     )
 import Control.Tracer
-    ( Tracer (..)
+    ( Tracer
     , nullTracer
-    , traceWith
     )
 import Data.Maybe
     ( isJust
     )
 import Data.Text
     ( Text
-    )
-import Data.Text.Class
-    ( ToText (..)
     )
 import Data.Time.Clock
     ( diffUTCTime
@@ -104,8 +71,7 @@ import UnliftIO.Concurrent
     ( threadDelay
     )
 import UnliftIO.Exception
-    ( bracket
-    , try
+    ( try
     )
 import UnliftIO.MVar
     ( modifyMVar_
@@ -350,24 +316,4 @@ assertProcessesExited phs = recoverAll policy test
         statuses `shouldSatisfy` all isJust
 
 withTestLogging :: (Tracer IO LauncherLog -> IO a) -> IO a
-withTestLogging action =
-    bracket before after (action . trMessageText . fst)
-  where
-    before = do
-        cfg <- defaultConfigStdout
-        setMinSeverity cfg Debug
-        setupTrace_ cfg "tests"
-    after (tr, sb) = do
-        logDebug tr "Logging shutdown."
-        shutdown sb
-
-trMessageText
-    :: (MonadIO m, ToText a, HasPrivacyAnnotation a, HasSeverityAnnotation a)
-    => Tracer m (LoggerName, LogObject Text)
-    -> Tracer m a
-trMessageText tr = Tracer $ \arg -> do
-    let msg = toText arg
-        tracer = if msg == mempty then nullTracer else tr
-    meta <-
-        mkLOMeta (getSeverityAnnotation arg) (getPrivacyAnnotation arg)
-    traceWith tracer (mempty, LogObject mempty meta (LogMessage msg))
+withTestLogging action = action nullTracer

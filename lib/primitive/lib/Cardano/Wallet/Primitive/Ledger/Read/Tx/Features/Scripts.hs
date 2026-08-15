@@ -36,6 +36,7 @@ import Cardano.Ledger.Mary.Value
 import Cardano.Wallet.Primitive.Ledger.Convert
     ( toPlutusScriptInfo
     , toWalletScript
+    , toWalletScriptFromDijkstra
     , toWalletTokenPolicyId
     )
 import Cardano.Wallet.Primitive.Ledger.Read.Tx.Features.Mint
@@ -133,7 +134,7 @@ dijkstraAnyExplicitScript witCtx (scriptRef, scriptH, script) =
     toAnyScript = \case
         Alonzo.NativeScript timelockScript ->
             NativeExplicitScript
-                (toWalletScript (toKeyRole witCtx) timelockScript)
+                (toWalletScriptFromDijkstra (toKeyRole witCtx) timelockScript)
                 scriptRef
         Alonzo.PlutusScript s ->
             PlutusExplicitScript

@@ -91,18 +91,18 @@ library
     , fmt
     , io-classes
     , io-classes:strict-stm
-    , iohk-monitoring
     , iohk-monitoring-extra
     , network-mux
     , nothunks
     , ouroboros-consensus
-    , ouroboros-consensus-cardano
-    , ouroboros-consensus-diffusion
-    , ouroboros-consensus-protocol
+    , ouroboros-consensus:cardano
+    , ouroboros-consensus:diffusion
+    , ouroboros-consensus:protocol
+    , cardano-diffusion
     , ouroboros-network
-    , ouroboros-network-api
-    , ouroboros-network-framework
-    , ouroboros-network-protocols
+    , ouroboros-network:api
+    , ouroboros-network:framework
+    , ouroboros-network:protocols
     , parallel
     , retry
     , safe

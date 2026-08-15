@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
@@ -135,10 +136,10 @@ import Cardano.Ledger.Api
     , ppMaxTxExUnitsL
     , ppMaxTxSizeL
     , ppMaxValSizeL
-    , ppMinFeeAL
-    , ppMinFeeBL
     , ppNOptL
     , ppPricesL
+    , ppTxFeeFixedL
+    , ppTxFeePerByteL
     )
 import Cardano.Ledger.BaseTypes
     ( strictMaybeToMaybe
@@ -155,7 +156,7 @@ import Cardano.Ledger.Shelley.Genesis
     )
 import Cardano.Ledger.State
     ( PoolMetadata (..)
-    , PoolParams (..)
+    , StakePoolParams (..)
     )
 import Cardano.Read.Ledger.Tx.Hash
     ( fromShelleyTxId
@@ -209,8 +210,15 @@ import Data.Bifunctor
 import Data.ByteString
     ( ByteString
     )
+import Data.Array.Byte
+    ( ByteArray (..)
+    )
 import Data.ByteString.Short
-    ( toShort
+    ( fromShort
+    , toShort
+    )
+import Data.ByteString.Short.Internal
+    ( ShortByteString (..)
     )
 import Data.Coerce
     ( coerce
@@ -270,7 +278,7 @@ import Ouroboros.Consensus.Shelley.Eras
 import Ouroboros.Consensus.Shelley.Ledger.Block
     ( ShelleyBlock (..)
     )
-import Ouroboros.Network.NodeToClient
+import Cardano.Network.NodeToClient
     ( ConnectionId (..)
     , LocalAddress (..)
     , NodeToClientVersion (..)
@@ -437,7 +445,7 @@ toCardanoEra = \case
     BlockAlonzo{} -> AnyCardanoEra AlonzoEra
     BlockBabbage{} -> AnyCardanoEra BabbageEra
     BlockConway{} -> AnyCardanoEra ConwayEra
-    _ -> error "toCardanoEra: era not yet supported"
+    BlockDijkstra{} -> AnyCardanoEra DijkstraEra
 
 -- NOTE: Unsafe conversion from Natural -> Word16
 fromMaxSize :: Word32 -> Quantity "byte" Word16
@@ -510,7 +518,7 @@ fromMaryPParams eraInfo pp =
         }
 
 fromBoundToEpochNo :: Bound -> W.EpochNo
-fromBoundToEpochNo (Bound _relTime _slotNo (EpochNo e)) =
+fromBoundToEpochNo (Bound _relTime _slotNo (EpochNo e) _) =
     W.EpochNo $ fromIntegral e
 
 fromAlonzoPParams
@@ -523,7 +531,7 @@ fromAlonzoPParams eraInfo pp =
         { decentralizationLevel = decentralizationLevelFromPParams pp
         , txParameters =
             txParametersFromPParams
-                (W.TokenBundleMaxSize $ W.TxSize $ pp ^. ppMaxValSizeL)
+                (W.TokenBundleMaxSize $ W.TxSize $ fromIntegral (pp ^. ppMaxValSizeL))
                 (fromLedgerExUnits (pp ^. ppMaxTxExUnitsL))
                 pp
         , desiredNumberOfStakePools =
@@ -533,7 +541,7 @@ fromAlonzoPParams eraInfo pp =
         , maximumCollateralInputCount =
             unsafeIntToWord $ pp ^. ppMaxCollateralInputsL
         , minimumCollateralPercentage =
-            pp ^. ppCollateralPercentageL
+            fromIntegral (pp ^. ppCollateralPercentageL)
         , executionUnitPrices =
             Just $ executionUnitPricesFromPParams pp
         }
@@ -549,7 +557,7 @@ fromBabbagePParams eraInfo pp =
             W.fromFederationPercentage $ Percentage.fromRationalClipped 0
         , txParameters =
             txParametersFromPParams
-                (W.TokenBundleMaxSize $ W.TxSize $ pp ^. ppMaxValSizeL)
+                (W.TokenBundleMaxSize $ W.TxSize $ fromIntegral (pp ^. ppMaxValSizeL))
                 (fromLedgerExUnits (pp ^. ppMaxTxExUnitsL))
                 pp
         , desiredNumberOfStakePools =
@@ -559,7 +567,7 @@ fromBabbagePParams eraInfo pp =
         , maximumCollateralInputCount =
             unsafeIntToWord $ pp ^. ppMaxCollateralInputsL
         , minimumCollateralPercentage =
-            pp ^. ppCollateralPercentageL
+            fromIntegral (pp ^. ppCollateralPercentageL)
         , executionUnitPrices =
             Just $ executionUnitPricesFromPParams pp
         }
@@ -575,7 +583,7 @@ fromDijkstraPParams eraInfo pp =
             W.fromFederationPercentage $ Percentage.fromRationalClipped 0
         , txParameters =
             txParametersFromPParams
-                (W.TokenBundleMaxSize $ W.TxSize $ pp ^. ppMaxValSizeL)
+                (W.TokenBundleMaxSize $ W.TxSize $ fromIntegral (pp ^. ppMaxValSizeL))
                 (fromLedgerExUnits (pp ^. ppMaxTxExUnitsL))
                 pp
         , desiredNumberOfStakePools = desiredNumberOfStakePoolsFromPParams pp
@@ -585,7 +593,7 @@ fromDijkstraPParams eraInfo pp =
             intCastMaybe (pp ^. ppMaxCollateralInputsL)
                 & fromMaybe
                     (error "Maximum count of collateral inputs exceeds 2^16")
-        , minimumCollateralPercentage = pp ^. ppCollateralPercentageL
+        , minimumCollateralPercentage = fromIntegral (pp ^. ppCollateralPercentageL)
         , executionUnitPrices = Just $ executionUnitPricesFromPParams pp
         }
 
@@ -600,7 +608,7 @@ fromConwayPParams eraInfo pp =
             W.fromFederationPercentage $ Percentage.fromRationalClipped 0
         , txParameters =
             txParametersFromPParams
-                (W.TokenBundleMaxSize $ W.TxSize $ pp ^. ppMaxValSizeL)
+                (W.TokenBundleMaxSize $ W.TxSize $ fromIntegral (pp ^. ppMaxValSizeL))
                 (fromLedgerExUnits (pp ^. ppMaxTxExUnitsL))
                 pp
         , desiredNumberOfStakePools = desiredNumberOfStakePoolsFromPParams pp
@@ -610,7 +618,7 @@ fromConwayPParams eraInfo pp =
             intCastMaybe (pp ^. ppMaxCollateralInputsL)
                 & fromMaybe
                     (error "Maximum count of collateral inputs exceeds 2^16")
-        , minimumCollateralPercentage = pp ^. ppCollateralPercentageL
+        , minimumCollateralPercentage = fromIntegral (pp ^. ppCollateralPercentageL)
         , executionUnitPrices = Just $ executionUnitPricesFromPParams pp
         }
 
@@ -655,8 +663,8 @@ txParametersFromPParams maxBundleSize getMaxExecutionUnits pp =
         { getFeePolicy =
             W.LinearFee
                 $ W.LinearFunction
-                    { intercept = coinToDouble (pp ^. ppMinFeeBL)
-                    , slope = coinToDouble (pp ^. ppMinFeeAL)
+                    { intercept = coinToDouble (pp ^. ppTxFeeFixedL)
+                    , slope = coinToDouble $ pp ^. ppTxFeePerByteL . Ledger.coinPerByteL . Ledger.partialCompactCoinL
                     }
         , getTxMaxSize = fromMaxSize $ pp ^. ppMaxTxSizeL
         , getTokenBundleMaxSize = maxBundleSize
@@ -722,13 +730,13 @@ fromGenesisData g =
         pure
             $ W.Registration
             $ PoolRegistrationCertificate
-                { W.poolId = fromPoolKeyHash $ ppId pp
-                , W.poolOwners = fromOwnerKeyHash <$> Set.toList (ppOwners pp)
-                , W.poolMargin = fromUnitInterval (ppMargin pp)
-                , W.poolCost = toWalletCoin (ppCost pp)
-                , W.poolPledge = toWalletCoin (ppPledge pp)
+                { W.poolId = fromPoolKeyHash $ sppId pp
+                , W.poolOwners = fromOwnerKeyHash <$> Set.toList (sppOwners pp)
+                , W.poolMargin = fromUnitInterval (sppMargin pp)
+                , W.poolCost = toWalletCoin (sppCost pp)
+                , W.poolPledge = toWalletCoin (sppPledge pp)
                 , W.poolMetadata =
-                    fromPoolMetadata <$> strictMaybeToMaybe (ppMetadata pp)
+                    fromPoolMetadata <$> strictMaybeToMaybe (sppMetadata pp)
                 }
 
     -- \| Construct a ("fake") genesis block from genesis transaction outputs.
@@ -777,7 +785,7 @@ fromGenesisData g =
 -- Stake pools
 --
 
-fromPoolId :: SL.KeyHash 'SL.StakePool -> PoolId
+fromPoolId :: SL.KeyHash SL.StakePool -> PoolId
 fromPoolId (SL.KeyHash x) = PoolId $ hashToBytes x
 
 fromPoolDistr
@@ -860,13 +868,13 @@ fromPoolMetadata
     :: SL.PoolMetadata -> (StakePoolMetadataUrl, StakePoolMetadataHash)
 fromPoolMetadata meta =
     ( StakePoolMetadataUrl (urlToText (pmUrl meta))
-    , StakePoolMetadataHash (pmHash meta)
+    , StakePoolMetadataHash (fromShort (case pmHash meta of ByteArray ba# -> SBS ba#))
     )
 
 fromPoolKeyHash :: SL.KeyHash rol -> PoolId
 fromPoolKeyHash (SL.KeyHash h) = PoolId (hashToBytes h)
 
-fromOwnerKeyHash :: SL.KeyHash 'SL.Staking -> PoolOwner
+fromOwnerKeyHash :: SL.KeyHash SL.Staking -> PoolOwner
 fromOwnerKeyHash (SL.KeyHash h) = PoolOwner (hashToBytes h)
 
 fromCardanoAddress :: Cardano.Address Cardano.ShelleyAddr -> W.Address
@@ -1063,7 +1071,7 @@ just t1 t2 = tina (t1 +| ": unable to deserialise " +| t2)
 
 toLedgerStakeCredential
     :: W.RewardAccount
-    -> SL.StakeCredential
+    -> SL.Credential SL.Staking
 toLedgerStakeCredential = \case
     W.FromKeyHash bs ->
         SL.KeyHashObj

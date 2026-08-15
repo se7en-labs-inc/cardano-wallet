@@ -31,21 +31,15 @@ module Cardano.Wallet.BenchShared
     , withTempSqliteFile
     ) where
 
-import Cardano.BM.Configuration.Static
-    ( defaultConfigStdout
-    )
 import Cardano.BM.Data.Severity
     ( Severity (..)
     )
 import Cardano.BM.Extra
     ( trMessageText
     )
-import Cardano.BM.Setup
-    ( setupTrace_
-    )
-import Cardano.BM.Trace
-    ( Trace
-    , nullTracer
+import Cardano.BM.ToTextTracer
+    ( toTextTracer
+    , withToTextTracer
     )
 import Cardano.Launcher
     ( ProcessHasExited (..)
@@ -71,6 +65,13 @@ import Control.DeepSeq
     )
 import Control.Monad
     ( forM
+    )
+import Control.Monad.Cont
+    ( runContT
+    )
+import Control.Tracer
+    ( Tracer
+    , nullTracer
     )
 import Criterion.Measurement
     ( getTime
@@ -138,6 +139,9 @@ import System.Exit
 import System.FilePath
     ( (</>)
     )
+import System.IO
+    ( stdout
+    )
 import System.IO.Extra
     ( withTempFile
     )
@@ -156,9 +160,6 @@ import UnliftIO.Temporary
     )
 import Prelude
 
-import qualified Cardano.BM.Configuration.Model as CM
-import qualified Cardano.BM.Data.BackendKind as CM
-
 {-------------------------------------------------------------------------------
                CLI option handling and cardano-node configuration
 -------------------------------------------------------------------------------}
@@ -166,13 +167,13 @@ import qualified Cardano.BM.Data.BackendKind as CM
 execBenchWithNode
     :: (RestoreBenchArgs -> cfg)
     -- ^ Get backend-specific network configuration from args
-    -> (RestoreBenchArgs -> Trace IO Text -> cfg -> CardanoNodeConn -> IO ())
+    -> (RestoreBenchArgs -> Tracer IO Text -> cfg -> CardanoNodeConn -> IO ())
     -- ^ Action to run
     -> IO ExitCode
 execBenchWithNode networkConfig action = withNoBuffering $ do
     args <- getRestoreBenchArgs
 
-    (_logCfg, tr') <- initBenchmarkLogging "bench-restore" Info
+    tr' <- initBenchmarkLogging "bench-restore" Info
     let tr = if argQuiet args then nullTracer else tr'
     installSignalHandlers (return ())
 
@@ -390,13 +391,9 @@ bench benchName action = do
     (res, t) <$ sayErr (pretty $ nameF (build benchName) (build t))
 
 initBenchmarkLogging
-    :: Text -> Severity -> IO (CM.Configuration, Trace IO Text)
-initBenchmarkLogging name minSeverity = do
-    c <- defaultConfigStdout
-    CM.setMinSeverity c minSeverity
-    CM.setSetupBackends c [CM.KatipBK, CM.AggregationBK]
-    (tr, _sb) <- setupTrace_ c name
-    pure (c, tr)
+    :: Text -> Severity -> IO (Tracer IO Text)
+initBenchmarkLogging _name minSeverity =
+    runContT (toTextTracer <$> withToTextTracer (Left stdout) (Just minSeverity)) pure
 
 withTempSqliteFile :: (FilePath -> IO a) -> IO a
 withTempSqliteFile action =

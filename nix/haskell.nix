@@ -177,7 +177,22 @@ CHaP: haskell-nix: nixpkgs-recent: nodePkgs: mithrilPkgs: set-git-rev: rewrite-l
         shellHook = "export LOCAL_CLUSTER_CONFIGS=${localClusterConfigs}";
       };
 
-      inputMap = { "https://chap.intersectmbo.org/" = CHaP; };
+      inputMap = {
+        "https://chap.intersectmbo.org/" = CHaP;
+        # ouroboros-consensus at the leios-prototype tag declares data-files
+        # inside cardano-blueprint/, which is a git submodule.  haskell.nix's
+        # default builtins.fetchGit does not fetch submodules, so cabal
+        # errors with [Cabal-6661] during plan-to-nix.  Providing the
+        # url/rev key in inputMap lets haskell.nix use this pre-fetched
+        # derivation (which includes submodules) as the SRP source instead.
+        "https://github.com/IntersectMBO/ouroboros-consensus/6dc84b8fead9226dada19ca26d8eb59e0000c388" =
+          pkgs.fetchgit {
+            url = "https://github.com/IntersectMBO/ouroboros-consensus";
+            rev = "6dc84b8fead9226dada19ca26d8eb59e0000c388";
+            sha256 = "088frv5wy99fj7paak476b69pz0f0yp9m9p2hnnzh16xkfqqixxm";
+            fetchSubmodules = true;
+          };
+      };
 
       modules =
         let inherit (config) src coverage profiling;
@@ -300,13 +315,69 @@ CHaP: haskell-nix: nixpkgs-recent: nodePkgs: mithrilPkgs: set-git-rev: rewrite-l
 
           # Build fixes for library dependencies
           {
-            # Packages we wish to ignore version bounds of.
-            # This is similar to jailbreakCabal, however it
-            # does not require any messing with cabal files.
-            packages.katip.doExactConfig = true;
-
             # Lets us put the pretty-simple tool in shell.nix.
             packages.pretty-simple.flags.buildexe = true;
+
+            # cardano-balance-tx uses ConwayRewarding/DijkstraRewarding which were
+            # renamed to ConwayWithdrawing/DijkstraWithdrawing in the new ledger.
+            packages.cardano-balance-tx.postPatch = ''
+              sed -i \
+                -e 's/Conway\.ConwayRewarding/Conway.ConwayWithdrawing/g' \
+                -e 's/Dijkstra\.DijkstraRewarding/Dijkstra.DijkstraWithdrawing/g' \
+                lib/Cardano/Balance/Tx/Redeemers.hs
+            '';
+
+            # cardano-ledger-read: sizeSignKeyVRF moved out of VRFAlgorithm class
+            # (now a standalone deprecated export). Add explicit import and suppress
+            # the deprecation error — fixedSize is in cardano-binary which is not
+            # directly imported here, so we can't use it as the replacement.
+            packages.cardano-ledger-read.postPatch = ''
+              sed -i \
+                -e 's/    , VRFAlgorithm (..)$/    , VRFAlgorithm (..)\n    , sizeSignKeyVRF/' \
+                src/Cardano/Read/Ledger/Block/Gen/Shelley.hs
+              sed -i '1s/^/{-# OPTIONS_GHC -Wno-deprecations #-}\n/' \
+                src/Cardano/Read/Ledger/Block/Gen/Shelley.hs
+
+              # Babbage.hs: HeaderBody gained hbLeiosExt (StrictMaybe HeaderLeiosExtension)
+              # as a required strict field in the Leios-era ouroboros-consensus.
+              sed -i \
+                -e 's/^import Ouroboros\.Consensus\.Protocol\.Praos\.Header$/import Data.Maybe.Strict (StrictMaybe (SNothing))\nimport Ouroboros.Consensus.Protocol.Praos.Header/' \
+                -e 's/        , hbProtVer = ProtVer v 0$/        , hbProtVer = ProtVer v 0\n        , hbLeiosExt = SNothing/' \
+                src/Cardano/Read/Ledger/Block/Gen/Babbage.hs
+            '';
+          }
+
+          # contra-tracer 0.2.x changed the Tracer constructor from
+          # `Tracer { runTracer :: a -> m () }` to
+          # `Tracer { runTracer :: Arrow.TracerA m a () }`.
+          # tracer-transformers-0.1.0.4 uses the old constructor pattern.
+          # Patch it to compile against the new API.
+          # (iohk-monitoring is no longer a wallet dependency — no patch needed.)
+          {
+            packages.tracer-transformers.postPatch = ''
+              # Transformers.hs: contra-tracer 0.2.x changed the Tracer constructor.
+              # Control.Tracer re-exports Arrow.emit :: (a -> m ()) -> TracerA m a ()
+              # (not a Tracer-level emit), so wrap with `arrow` to get Tracer m a.
+              # fanning has no Monad/Applicative constraint on m — add one.
+              # counting/folding have local `mkTracer` helpers that now shadow the
+              # imported `mkTracer` from Control.Tracer (-Werror=name-shadowing) —
+              # rename them to `go`.
+              sed -i \
+                -e 's/\. (a -> Tracer m a) -> Tracer m a/. Monad m => (a -> Tracer m a) -> Tracer m a/' \
+                -e 's/= Tracer \$ \\/= arrow . emit \$ \\/g' \
+                -e 's/\bmkTracer\b/go/g' \
+                src/Control/Tracer/Transformers.hs
+
+              # ObserveOutcome.lhs and WithThreadAndTime.lhs: explicit import
+              # list that omits mkTracer — add it then replace the constructor.
+              for f in src/Control/Tracer/Transformers/ObserveOutcome.lhs \
+                        src/Control/Tracer/Transformers/WithThreadAndTime.lhs; do
+                sed -i \
+                  -e 's/(Tracer (..), traceWith)/(Tracer (..), mkTracer, traceWith)/' \
+                  -e 's/= Tracer \$ \\/= mkTracer \$ \\/g' \
+                  "$f"
+              done
+            '';
           }
 
           # Enable profiling on executables if the profiling argument is set.
@@ -349,6 +420,16 @@ CHaP: haskell-nix: nixpkgs-recent: nodePkgs: mithrilPkgs: set-git-rev: rewrite-l
           # supported for hpack package" which appear in nix-shell
           {
             packages.cardano-addresses.cabal-generator = lib.mkForce null;
+          }
+
+          # ouroboros-consensus declares cardano-blueprint/ files in data-files.
+          # cardano-blueprint is a git submodule; haskell.nix source cleaning drops
+          # submodule contents.  extraSrcFiles re-includes them so every component
+          # that copies data-files on install does not fail with [Cabal-6661].
+          {
+            packages.ouroboros-consensus.package.extraSrcFiles = [
+              "cardano-blueprint/src/**/*"
+            ];
           }
 
         ];

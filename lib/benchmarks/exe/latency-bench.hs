@@ -23,15 +23,11 @@ import Cardano.BM.Data.Tracer
     )
 import Cardano.BM.Extra
     ( stdoutTextTracer
-    , trMessage
     )
 import Cardano.BM.ToTextTracer
     ( ToTextTracer (..)
     , overToTextTracer
     , withToTextTracer
-    )
-import Cardano.BM.Trace
-    ( traceInTVarIO
     )
 import Cardano.Ledger.BaseTypes
     ( unsafeNonZero
@@ -169,6 +165,9 @@ import Control.Monad.Cont
 import Control.Monad.IO.Class
     ( liftIO
     )
+import Control.Tracer
+    ( mkTracer
+    )
 import Control.Monad.IO.Unlift
     ( toIO
     )
@@ -179,9 +178,6 @@ import Control.Monad.Reader
     )
 import Data.Bifunctor
     ( bimap
-    )
-import Data.Functor.Contravariant
-    ( (>$<)
     )
 import Data.Generics.Internal.VL.Lens
     ( over
@@ -197,6 +193,7 @@ import Data.Generics.Wrapped
     )
 import Data.Time
     ( NominalDiffTime
+    , getCurrentTime
     )
 import Fmt
     ( Builder
@@ -251,6 +248,10 @@ import Test.Integration.Framework.DSL
 import UnliftIO.Async
     ( race_
     )
+import UnliftIO.STM
+    ( atomically
+    , modifyTVar
+    )
 import UnliftIO.MVar
     ( newEmptyMVar
     , putMVar
@@ -278,7 +279,9 @@ main = withUtf8 $ evalContT $ do
             overToTextTracer (filterSeverity (const $ pure Error)) tr
         setupTracers tvar =
             Tracers
-                { apiServerTracer = trMessage $ snd >$< traceInTVarIO tvar
+                { apiServerTracer = mkTracer $ \msg -> do
+                    t <- getCurrentTime
+                    atomically $ modifyTVar tvar ((t, msg) :)
                 , applicationTracer = onlyErrors
                 , tokenMetadataTracer = onlyErrors
                 , walletEngineTracer = onlyErrors

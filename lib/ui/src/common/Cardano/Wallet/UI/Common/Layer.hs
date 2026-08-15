@@ -44,7 +44,8 @@ import Control.Monad.Cont
     ( ContT (..)
     )
 import Control.Tracer
-    ( Tracer (..)
+    ( Tracer
+    , mkTracer
     , traceWith
     )
 import Data.Functor
@@ -173,7 +174,7 @@ mkUILayer
 mkUILayer throttling oobChan sessions' s0 = UILayer{..}
   where
     oobMessages =
-        Tracer
+        mkTracer
             $ throttling
                 . atomically
                 . writeTChan oobChan
@@ -189,7 +190,7 @@ mkUILayer throttling oobChan sessions' s0 = UILayer{..}
                 modifyTVar sessions' $ Map.insert sid session
                 pure session
 
-    signals = Tracer $ \case
+    signals = mkTracer $ \case
         NewTip -> throttling $ do
             sessions'' <- readTVarIO sessions'
             forM_ (Map.elems sessions'') $ \s -> do

@@ -22,6 +22,7 @@ module Cardano.Api.Extra
 
 import Cardano.Balance.Tx.Eras
     ( Conway
+    , Dijkstra
     , IsRecentEra (recentEra)
     , RecentEra (..)
     )
@@ -46,6 +47,7 @@ inAnyCardanoEra = Cardano.InAnyCardanoEra Cardano.cardanoEra
 type family CardanoApiEra era = cardanoApiEra | cardanoApiEra -> era
 
 type instance CardanoApiEra Conway = Cardano.ConwayEra
+type instance CardanoApiEra Dijkstra = Cardano.DijkstraEra
 
 -- | Bring Cardano.Api era constraints into scope for a 'RecentEra'.
 cardanoApiEraConstraints
@@ -59,8 +61,7 @@ cardanoApiEraConstraints
        )
     -> a
 cardanoApiEraConstraints RecentEraConway f = f
-cardanoApiEraConstraints RecentEraDijkstra _ =
-    error "cardanoApiEraConstraints: Dijkstra era not yet supported"
+cardanoApiEraConstraints RecentEraDijkstra f = f
 
 -- | Temporary shim for 'shelleyBasedEraFromRecentEra'.
 shelleyBasedEraFromRecentEra
@@ -69,7 +70,7 @@ shelleyBasedEraFromRecentEra
 shelleyBasedEraFromRecentEra RecentEraConway =
     Cardano.ShelleyBasedEraConway
 shelleyBasedEraFromRecentEra RecentEraDijkstra =
-    error "shelleyBasedEraFromRecentEra: Dijkstra era not yet supported"
+    Cardano.ShelleyBasedEraDijkstra
 
 -- | Temporary shim for 'cardanoEraFromRecentEra'.
 cardanoEraFromRecentEra
@@ -78,7 +79,7 @@ cardanoEraFromRecentEra
 cardanoEraFromRecentEra RecentEraConway =
     Cardano.ConwayEra
 cardanoEraFromRecentEra RecentEraDijkstra =
-    error "cardanoEraFromRecentEra: Dijkstra era not yet supported"
+    Cardano.DijkstraEra
 
 -- | Convert a ledger-era transaction to a Cardano.Api transaction.
 toCardanoApiTx
@@ -90,7 +91,7 @@ toCardanoApiTx tx = case recentEra :: RecentEra era of
     RecentEraConway ->
         Cardano.ShelleyTx Cardano.ShelleyBasedEraConway tx
     RecentEraDijkstra ->
-        error "toCardanoApiTx: Dijkstra era not yet supported"
+        Cardano.ShelleyTx Cardano.ShelleyBasedEraDijkstra tx
 
 -- | Convert a Cardano.Api transaction to a ledger-era transaction.
 fromCardanoApiTx
@@ -101,5 +102,5 @@ fromCardanoApiTx
 fromCardanoApiTx tx = case recentEra :: RecentEra era of
     RecentEraConway -> case tx of
         Cardano.ShelleyTx _ ledgerTx -> ledgerTx
-    RecentEraDijkstra ->
-        error "fromCardanoApiTx: Dijkstra era not yet supported"
+    RecentEraDijkstra -> case tx of
+        Cardano.ShelleyTx _ ledgerTx -> ledgerTx

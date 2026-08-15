@@ -1,9 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
-
--- TODO: Migrate from deprecated Cardano.Api.Certificate to
--- Cardano.Api.Experimental.Certificate
+{-# LANGUAGE TypeApplications #-}
 
 -- |
 -- Copyright: © 2024 Cardano Foundation
@@ -23,9 +20,6 @@ import Cardano.Address.KeyHash
     )
 import Cardano.Address.Script
     ( Script (..)
-    )
-import Cardano.Api.Extra
-    ( CardanoApiEra
     )
 import Cardano.Balance.Tx.Eras
     ( RecentEra (..)
@@ -55,6 +49,7 @@ import Data.ByteString.Short
 import Prelude
 
 import qualified Cardano.Api as Cardano
+import qualified Cardano.Api.Experimental.Certificate as ExpCert
 import qualified Cardano.Api.Ledger as Ledger
 
 {-----------------------------------------------------------------------------
@@ -69,37 +64,46 @@ certificateFromVotingAction
     -- ^ Deposit
     -> VotingAction
     -- ^ Voting action in Conway era onwards
-    -> [Cardano.Certificate (CardanoApiEra era)]
+    -> [ExpCert.Certificate era]
     -- ^ Certificates representing the voting action
 certificateFromVotingAction RecentEraConway cred depositM va =
     case (va, depositM) of
         (Vote action, _) ->
-            [ Cardano.makeStakeAddressDelegationCertificate
-                $ Cardano.StakeDelegationRequirementsConwayOnwards
-                    conwayWitness
-                    (toCardanoStakeCredential cred)
-                    (toLedgerDelegatee Nothing (Just action))
+            [ ExpCert.makeStakeAddressDelegationCertificate @Cardano.ConwayEra
+                (toCardanoStakeCredential cred)
+                (toLedgerDelegatee Nothing (Just action))
             ]
         (VoteRegisteringKey action, Just deposit) ->
-            [ Cardano.makeStakeAddressRegistrationCertificate
-                $ Cardano.StakeAddrRegistrationConway
-                    conwayWitness
-                    (toCardanoLovelace deposit)
-                    (toCardanoStakeCredential cred)
-            , Cardano.makeStakeAddressDelegationCertificate
-                $ Cardano.StakeDelegationRequirementsConwayOnwards
-                    conwayWitness
-                    (toCardanoStakeCredential cred)
-                    (toLedgerDelegatee Nothing (Just action))
+            [ ExpCert.makeStakeAddressRegistrationCertificate @Cardano.ConwayEra
+                (toCardanoStakeCredential cred)
+                (toCardanoLovelace deposit)
+            , ExpCert.makeStakeAddressDelegationCertificate @Cardano.ConwayEra
+                (toCardanoStakeCredential cred)
+                (toLedgerDelegatee Nothing (Just action))
             ]
         (VoteRegisteringKey _, Nothing) ->
             error
                 "certificateFromVotingAction: deposit value required in \
                 \Conway era when registration is carried out"
-  where
-    conwayWitness = Cardano.ConwayEraOnwardsConway
-certificateFromVotingAction RecentEraDijkstra _cred _depositM _va =
-    error "certificateFromVotingAction: Dijkstra era not yet supported"
+certificateFromVotingAction RecentEraDijkstra cred depositM va =
+    case (va, depositM) of
+        (Vote action, _) ->
+            [ ExpCert.makeStakeAddressDelegationCertificate @Cardano.DijkstraEra
+                (toCardanoStakeCredential cred)
+                (toLedgerDelegatee Nothing (Just action))
+            ]
+        (VoteRegisteringKey action, Just deposit) ->
+            [ ExpCert.makeStakeAddressRegistrationCertificate @Cardano.DijkstraEra
+                (toCardanoStakeCredential cred)
+                (toCardanoLovelace deposit)
+            , ExpCert.makeStakeAddressDelegationCertificate @Cardano.DijkstraEra
+                (toCardanoStakeCredential cred)
+                (toLedgerDelegatee Nothing (Just action))
+            ]
+        (VoteRegisteringKey _, Nothing) ->
+            error
+                "certificateFromVotingAction: deposit value required in \
+                \Dijkstra era when registration is carried out"
 
 {-----------------------------------------------------------------------------
     Cardano.StakeCredential

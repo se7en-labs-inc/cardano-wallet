@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -19,13 +20,22 @@ where
 import Cardano.Crypto.Hash.Class
     ( hashToBytes
     )
+import Data.Array.Byte
+    ( ByteArray (..)
+    )
+import Data.ByteString.Short
+    ( fromShort
+    )
+import Data.ByteString.Short.Internal
+    ( ShortByteString (..)
+    )
 import Cardano.Ledger.BaseTypes
     ( strictMaybeToMaybe
     , urlToText
     )
 import Cardano.Ledger.Shelley.API
     ( PoolMetadata (..)
-    , PoolParams (..)
+    , StakePoolParams (..)
     )
 import Cardano.Ledger.Shelley.TxCert
     ( PoolCert (..)
@@ -195,19 +205,19 @@ mkShelleyCertsK
     -> [W.Certificate]
 mkShelleyCertsK (Certificates cs) = map fromShelleyCert $ toList cs
 
-mkPoolRegistrationCertificate :: PoolParams -> W.Certificate
+mkPoolRegistrationCertificate :: StakePoolParams -> W.Certificate
 mkPoolRegistrationCertificate pp =
     W.CertificateOfPool
         $ Registration
         $ PoolRegistrationCertificate
-            { poolId = fromPoolKeyHash (ppId pp)
-            , poolOwners = fromOwnerKeyHash <$> Set.toList (ppOwners pp)
-            , poolMargin = fromUnitInterval (ppMargin pp)
-            , poolCost = toWalletCoin (ppCost pp)
-            , poolPledge = toWalletCoin (ppPledge pp)
+            { poolId = fromPoolKeyHash (sppId pp)
+            , poolOwners = fromOwnerKeyHash <$> Set.toList (sppOwners pp)
+            , poolMargin = fromUnitInterval (sppMargin pp)
+            , poolCost = toWalletCoin (sppCost pp)
+            , poolPledge = toWalletCoin (sppPledge pp)
             , poolMetadata =
                 fromPoolMetadata
-                    <$> strictMaybeToMaybe (ppMetadata pp)
+                    <$> strictMaybeToMaybe (sppMetadata pp)
             }
 
 mkPoolRetirementCertificate
@@ -222,7 +232,7 @@ mkPoolRetirementCertificate pid (EpochNo e) =
 
 mkRegisterKeyCertificate
     :: Maybe W.Coin
-    -> SL.Credential 'SL.Staking
+    -> SL.Credential SL.Staking
     -> W.Certificate
 mkRegisterKeyCertificate deposit =
     W.CertificateOfDelegation deposit
@@ -231,7 +241,7 @@ mkRegisterKeyCertificate deposit =
 
 mkDelegationNone
     :: Maybe W.Coin
-    -> SL.Credential 'SL.Staking
+    -> SL.Credential SL.Staking
     -> W.Certificate
 mkDelegationNone deposit credentials =
     W.CertificateOfDelegation deposit
@@ -239,7 +249,7 @@ mkDelegationNone deposit credentials =
 
 mkDelegationVoting
     :: Maybe W.Coin
-    -> SL.Credential 'SL.Staking
+    -> SL.Credential SL.Staking
     -> Ledger.Delegatee
     -> W.Certificate
 mkDelegationVoting deposit cred = \case
@@ -299,14 +309,14 @@ fromPoolMetadata
     -> (StakePoolMetadataUrl, StakePoolMetadataHash)
 fromPoolMetadata meta =
     ( StakePoolMetadataUrl (urlToText (pmUrl meta))
-    , StakePoolMetadataHash (pmHash meta)
+    , StakePoolMetadataHash (fromShort (case pmHash meta of ByteArray ba# -> SBS ba#))
     )
 
 -- | Convert a stake credentials to a 'RewardAccount' type.
 --
 -- Unlike with Jörmungandr, the reward account payload doesn't represent a
 -- public key but a HASH of a public key.
-fromStakeCredential :: SL.Credential 'SL.Staking -> W.RewardAccount
+fromStakeCredential :: SL.Credential SL.Staking -> W.RewardAccount
 fromStakeCredential = \case
     SL.ScriptHashObj (SL.ScriptHash h) ->
         W.FromScriptHash (hashToBytes h)
@@ -317,7 +327,7 @@ fromPoolKeyHash :: SL.KeyHash rol -> PoolId
 fromPoolKeyHash (SL.KeyHash h) =
     PoolId (hashToBytes h)
 
-fromOwnerKeyHash :: SL.KeyHash 'SL.Staking -> PoolOwner
+fromOwnerKeyHash :: SL.KeyHash SL.Staking -> PoolOwner
 fromOwnerKeyHash (SL.KeyHash h) =
     PoolOwner (hashToBytes h)
 

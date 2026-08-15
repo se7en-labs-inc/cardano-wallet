@@ -84,10 +84,8 @@ library framework
     , http-client
     , http-types
     , HUnit
-    , iohk-monitoring
     , iohk-monitoring-extra
     , lens
-    , lobemo-backend-ekg
     , local-cluster
     , local-cluster:local-cluster-process
     , memory

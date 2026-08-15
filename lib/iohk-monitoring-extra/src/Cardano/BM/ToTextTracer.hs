@@ -6,15 +6,15 @@ module Cardano.BM.ToTextTracer
     , withFile
     , withToTextTracer
     , overToTextTracer
+    , toTextTracer
     )
 where
 
+import Cardano.BM.Data.Severity
+    ( Severity
+    )
 import Cardano.BM.Data.Tracer
     ( HasSeverityAnnotation (..)
-    , Tracer (Tracer)
-    )
-import Cardano.BM.Tracing
-    ( Severity
     )
 import Control.Monad
     ( forever
@@ -25,6 +25,13 @@ import Control.Monad.STM
     )
 import Control.Monad.Trans.Cont
     ( ContT (..)
+    )
+import Control.Tracer
+    ( Tracer
+    , mkTracer
+    )
+import Data.Text
+    ( Text
     )
 import Data.Text.Class
     ( ToText (..)
@@ -103,7 +110,7 @@ withToTextTracer mClusterLogsFile minSeverity = do
                 <> "] "
                 <> x
     ContT $ \k -> do
-        r <- k $ ToTextTracer $ Tracer $ \msg -> do
+        r <- k $ ToTextTracer $ mkTracer $ \msg -> do
             let severity = getSeverityAnnotation msg
             unless (Just severity < minSeverity) $ do
                 t <- getCurrentTime
@@ -117,8 +124,8 @@ withToTextTracer mClusterLogsFile minSeverity = do
 -- | A withFile function that creates the directory if it doesn't exist,
 -- and sets the buffering to NoBuffering. It also catches exceptions and
 -- closes the handle before rethrowing the exception.
--- This cover also a problem with the original withFile function that
--- replace any exception happening in the action with a generic
+-- This covers also a problem with the original withFile function that
+-- replaces any exception happening in the action with a generic
 -- "withFile: openFile: does not exist"
 withFile :: FilePath -> IOMode -> (Handle -> IO a) -> IO a
 withFile path mode action = do
@@ -133,6 +140,12 @@ withFile path mode action = do
             hClose h
             throwIO e
     catch action' handler
+
+-- | Extract a 'Tracer IO Text' from a 'ToTextTracer'.
+-- Text messages have severity 'Debug' so no filtering happens at this level;
+-- callers are expected to filter upstream.
+toTextTracer :: ToTextTracer -> Tracer IO Text
+toTextTracer (ToTextTracer tr) = tr
 
 -- | Modify the tracer of a `ToTextTracer`
 overToTextTracer

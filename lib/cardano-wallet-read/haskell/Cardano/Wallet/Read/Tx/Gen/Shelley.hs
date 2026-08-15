@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -112,7 +113,7 @@ import Data.Set qualified as Set
 
 mkShelleyTx
     :: TxParameters
-    -> L.Tx ShelleyEra
+    -> L.Tx L.TopTx ShelleyEra
 mkShelleyTx TxParameters{txInputs, txOutputs} =
     MkShelleyTx $ ShelleyTx (body txInputs txOutputs) wits aux
 
@@ -126,7 +127,7 @@ body
     :: HasCallStack
     => NonEmpty (Index, TxId)
     -> NonEmpty (Address, Lovelace)
-    -> L.TxBody ShelleyEra
+    -> L.TxBody L.TopTx ShelleyEra
 body ins outs =
     ShelleyTxBody
         (txins ins)
@@ -190,5 +191,5 @@ mkShelleyInput (Index idx) txid =
         $ mkTxInPartial txid
         $ fromIntegral idx
 
-exampleShelleyTx :: L.Tx ShelleyEra
+exampleShelleyTx :: L.Tx L.TopTx ShelleyEra
 exampleShelleyTx = mkShelleyTx exampleTxParameters

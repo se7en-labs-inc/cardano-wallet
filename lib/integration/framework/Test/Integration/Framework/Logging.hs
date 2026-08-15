@@ -20,12 +20,6 @@ import Cardano.BM.Extra
     , bracketTracer
     , trMessageText
     )
-import Cardano.BM.Plugin
-    ( loadPlugin
-    )
-import Cardano.BM.Trace
-    ( appendName
-    )
 import Cardano.Wallet.Application
     ( Tracers
     , setupTracers
@@ -33,7 +27,6 @@ import Cardano.Wallet.Application
     )
 import Cardano.Wallet.Application.CLI
     ( LogOutput (..)
-    , ekgEnabled
     , withLogging
     )
 import Cardano.Wallet.Launch.Cluster
@@ -49,11 +42,8 @@ import Cardano.Wallet.Launch.Cluster.FileOf
     , mkRelDirOf
     , toFilePath
     )
-import Control.Monad
-    ( when
-    )
 import Control.Tracer
-    ( Tracer (..)
+    ( Tracer
     , contramap
     )
 import Data.Text
@@ -78,7 +68,6 @@ import UnliftIO.Exception
     )
 import Prelude
 
-import qualified Cardano.BM.Backend.EKGView as EKG
 import qualified Data.Text as T
 
 data TestsLog
@@ -162,12 +151,10 @@ withTracers testDir action = do
     testLogOutputs <-
         getLogOutputs testMinSeverityFromEnv $ relFile "test.log"
 
-    withLogging walletLogOutputs $ \(sb, (cfg, walTr)) -> do
-        ekgEnabled >>= flip when (EKG.plugin cfg walTr sb >>= loadPlugin sb)
-        withLogging testLogOutputs $ \(_, (_, testTr)) -> do
-            let trTests = appendName "integration" testTr
+    withLogging walletLogOutputs $ \walTr -> do
+        withLogging testLogOutputs $ \testTr -> do
             let tracers = setupTracers (tracerSeverities (Just Debug)) walTr
-            action (trMessageText trTests, tracers)
+            action (trMessageText testTr, tracers)
 
 bracketTracer' :: Tracer IO TestsLog -> Text -> IO a -> IO a
 bracketTracer' tr name = bracketTracer (contramap (MsgBracket name) tr)

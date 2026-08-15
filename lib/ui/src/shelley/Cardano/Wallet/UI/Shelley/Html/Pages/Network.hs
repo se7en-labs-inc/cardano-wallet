@@ -131,6 +131,7 @@ nodeEraH ApiMary = "Mary"
 nodeEraH ApiAlonzo = "Alonzo"
 nodeEraH ApiBabbage = "Babbage"
 nodeEraH ApiConway = "Conway"
+nodeEraH ApiDijkstra = "Dijkstra"
 
 -- | Render the network id and protocol magic as a record
 networkIdH :: ApiNetworkInfo -> Html ()

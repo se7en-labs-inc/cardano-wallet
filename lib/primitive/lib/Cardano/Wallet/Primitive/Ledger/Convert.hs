@@ -36,6 +36,7 @@ module Cardano.Wallet.Primitive.Ledger.Convert
     , toWalletTokenQuantity
     , toWalletScript
     , toWalletScriptFromShelley
+    , toWalletScriptFromDijkstra
 
       -- * Roundtrip conversion between wallet types and ledger specification
 
@@ -47,10 +48,14 @@ module Cardano.Wallet.Primitive.Ledger.Convert
     , toConwayTxOut
     , fromBabbageTxOut
     , fromConwayTxOut
+    , toDijkstraTxOut
+    , fromDijkstraTxOut
     , toWalletUTxOBabbage
     , toWalletUTxOConway
     , toLedgerUTxOBabbage
     , toLedgerUTxOConway
+    , toLedgerUTxODijkstra
+    , toWalletUTxODijkstra
     ) where
 
 import Cardano.Address.KeyHash
@@ -69,6 +74,16 @@ import Cardano.Ledger.Babbage
     )
 import Cardano.Ledger.Conway
     ( ConwayEra
+    )
+import Cardano.Ledger.Dijkstra
+    ( DijkstraEra
+    )
+import Cardano.Ledger.Dijkstra.Scripts
+    ( DijkstraNativeScript
+    , DijkstraNativeScriptRaw (..)
+    )
+import Cardano.Ledger.MemoBytes
+    ( getMemoRawType
     )
 import Cardano.Slotting.Slot
     ( SlotNo (..)
@@ -162,7 +177,6 @@ import qualified Cardano.Ledger.DRep as Ledger
 import qualified Cardano.Ledger.Hashes as Hashes
 import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Mary.Value as Ledger
-import qualified Cardano.Ledger.Plutus.Language as Ledger
 import qualified Cardano.Ledger.Shelley.API as Ledger
 import qualified Cardano.Ledger.Shelley.Scripts as Scripts
 import qualified Cardano.Wallet.Primitive.Types.Coin as Coin
@@ -396,6 +410,23 @@ fromConwayTxOut
 fromConwayTxOut (Babbage.BabbageTxOut addr val _ _) =
     TxOut (toWallet addr) (toWallet val)
 
+toDijkstraTxOut
+    :: TxOut
+    -> Babbage.BabbageTxOut DijkstraEra
+toDijkstraTxOut (TxOut addr bundle) =
+    Babbage.BabbageTxOut
+        (toLedger addr)
+        (toLedger bundle)
+        Ledger.NoDatum
+        Ledger.SNothing
+
+-- NOTE: Inline scripts and datums will be lost in the conversion.
+fromDijkstraTxOut
+    :: Babbage.BabbageTxOut DijkstraEra
+    -> TxOut
+fromDijkstraTxOut (Babbage.BabbageTxOut addr val _ _) =
+    TxOut (toWallet addr) (toWallet val)
+
 -- NOTE: Inline scripts and datums will be lost in the conversion.
 fromBabbageTxOut
     :: Babbage.BabbageTxOut BabbageEra
@@ -430,6 +461,18 @@ toWalletUTxOConway (Ledger.UTxO m) =
     UTxO
         $ Map.mapKeys toWallet
         $ Map.map fromConwayTxOut m
+
+toLedgerUTxODijkstra :: UTxO -> Ledger.UTxO DijkstraEra
+toLedgerUTxODijkstra (UTxO m) =
+    Ledger.UTxO
+        $ Map.mapKeys toLedger
+        $ Map.map toDijkstraTxOut m
+
+toWalletUTxODijkstra :: Ledger.UTxO DijkstraEra -> UTxO
+toWalletUTxODijkstra (Ledger.UTxO m) =
+    UTxO
+        $ Map.mapKeys toWallet
+        $ Map.map fromDijkstraTxOut m
 
 --------------------------------------------------------------------------------
 -- Conversions for timelock and multisignature scripts
@@ -482,6 +525,29 @@ toWalletScriptFromShelley keyrole = fromLedgerScript'
         RequireSomeOf (fromIntegral num)
             $ fromLedgerScript' <$> toList contents
     fromLedgerScript' _ = error "impossible"
+
+toWalletScriptFromDijkstra
+    :: (Hash "VerificationKey" -> KeyRole)
+    -> DijkstraNativeScript DijkstraEra
+    -> Script KeyHash
+toWalletScriptFromDijkstra tokeyrole script =
+    case getMemoRawType script of
+        DijkstraRequireSignature (Ledger.KeyHash h) ->
+            let payload = hashToBytes h
+            in RequireSignatureOf (KeyHash (tokeyrole (Hash payload)) payload)
+        DijkstraRequireAllOf contents ->
+            RequireAllOf $ map (toWalletScriptFromDijkstra tokeyrole) $ toList contents
+        DijkstraRequireAnyOf contents ->
+            RequireAnyOf $ map (toWalletScriptFromDijkstra tokeyrole) $ toList contents
+        DijkstraRequireMOf num contents ->
+            RequireSomeOf (fromIntegral num)
+                $ toWalletScriptFromDijkstra tokeyrole <$> toList contents
+        DijkstraTimeStart (SlotNo slot) ->
+            ActiveFromSlot $ fromIntegral slot
+        DijkstraTimeExpire (SlotNo slot) ->
+            ActiveUntilSlot $ fromIntegral slot
+        DijkstraRequireGuard _ ->
+            error "toWalletScriptFromDijkstra: RequireGuard not supported"
 
 toLedgerTimelockScript
     :: forall era

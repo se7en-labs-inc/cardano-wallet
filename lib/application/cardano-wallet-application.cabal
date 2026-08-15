@@ -56,9 +56,7 @@ executable cardano-wallet
     , cardano-wallet-launcher
     , cardano-wallet-network-layer
     , contra-tracer
-    , iohk-monitoring
     , iohk-monitoring-extra
-    , lobemo-backend-ekg
     , network-uri
     , optparse-applicative
     , text
@@ -120,7 +118,6 @@ library
     , filepath
     , fmt
     , http-client
-    , iohk-monitoring
     , iohk-monitoring-extra
     , network
     , ntp-client
@@ -133,6 +130,7 @@ library
     , text
     , text-class
     , time
+    , transformers
     , unliftio
     , wai-middleware-logging
     , warp

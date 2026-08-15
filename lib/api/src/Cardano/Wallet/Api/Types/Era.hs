@@ -68,7 +68,6 @@ import Text.Show
 import Prelude
     ( Bounded
     , Enum
-    , error
     )
 
 import qualified Cardano.Balance.Tx.Eras as Write
@@ -84,6 +83,7 @@ data ApiEra
     | ApiAlonzo
     | ApiBabbage
     | ApiConway
+    | ApiDijkstra
     deriving (Data, Show, Eq, Generic, Enum, Ord, Bounded)
     deriving anyclass (NFData)
 
@@ -110,8 +110,7 @@ fromReadEra (Read.EraValue era) = case era of
     Read.Alonzo -> ApiAlonzo
     Read.Babbage -> ApiBabbage
     Read.Conway -> ApiConway
-    -- TODO: add ApiDijkstra once DijkstraEra is promoted to a RecentEra
-    Read.Dijkstra -> error "fromReadEra: DijkstraEra not yet supported"
+    Read.Dijkstra -> ApiDijkstra
 
 fromAnyCardanoEra :: AnyCardanoEra -> ApiEra
 fromAnyCardanoEra = \case
@@ -122,8 +121,7 @@ fromAnyCardanoEra = \case
     AnyCardanoEra AlonzoEra -> ApiAlonzo
     AnyCardanoEra BabbageEra -> ApiBabbage
     AnyCardanoEra ConwayEra -> ApiConway
-    -- TODO: add ApiDijkstra once DijkstraEra is promoted to a RecentEra
-    AnyCardanoEra DijkstraEra -> error "fromAnyCardanoEra: DijkstraEra not yet supported"
+    AnyCardanoEra DijkstraEra -> ApiDijkstra
 
 toAnyCardanoEra :: ApiEra -> AnyCardanoEra
 toAnyCardanoEra = \case
@@ -134,6 +132,7 @@ toAnyCardanoEra = \case
     ApiAlonzo -> AnyCardanoEra AlonzoEra
     ApiBabbage -> AnyCardanoEra BabbageEra
     ApiConway -> AnyCardanoEra ConwayEra
+    ApiDijkstra -> AnyCardanoEra DijkstraEra
 
 -- | The complete set of recent eras.
 allRecentEras :: Set ApiEra
@@ -147,5 +146,4 @@ allRecentEras =
 fromAnyRecentEra :: Write.AnyRecentEra -> Maybe ApiEra
 fromAnyRecentEra = \case
     Write.AnyRecentEra Write.RecentEraConway -> Just ApiConway
-    -- TODO: add ApiDijkstra once DijkstraEra is fully supported
-    Write.AnyRecentEra Write.RecentEraDijkstra -> Nothing
+    Write.AnyRecentEra Write.RecentEraDijkstra -> Just ApiDijkstra

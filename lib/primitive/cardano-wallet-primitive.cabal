@@ -86,7 +86,7 @@ library
     , generics-sop
     , hashable
     , int-cast
-    , iohk-monitoring
+    , iohk-monitoring-extra
     , lattices
     , lens
     , memory
@@ -97,10 +97,11 @@ library
     , nothunks
     , OddWord
     , ouroboros-consensus
-    , ouroboros-consensus-cardano
-    , ouroboros-consensus-protocol
+    , ouroboros-consensus:cardano
+    , ouroboros-consensus:protocol
+    , cardano-diffusion
     , ouroboros-network
-    , ouroboros-network-api
+    , ouroboros-network:api
     , pretty-simple
     , QuickCheck
     , quiet
@@ -254,12 +255,12 @@ test-suite test
     , generic-lens
     , hspec
     , hspec-core
-    , iohk-monitoring
+    , iohk-monitoring-extra
     , lens
     , memory
     , ouroboros-consensus
-    , ouroboros-consensus-cardano
-    , ouroboros-network-api
+    , ouroboros-consensus:cardano
+    , ouroboros-network:api
     , QuickCheck
     , quickcheck-classes
     , quickcheck-instances

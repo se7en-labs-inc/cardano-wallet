@@ -51,6 +51,7 @@ import Cardano.Wallet.Read
     , Alonzo
     , Babbage
     , Conway
+    , Dijkstra
     , IsEra
     , Mary
     , Shelley
@@ -72,7 +73,7 @@ fromCardanoTx = \case
         Cardano.ShelleyBasedEraAlonzo -> getTxExtended @Alonzo $ Tx tx
         Cardano.ShelleyBasedEraBabbage -> getTxExtended @Babbage $ Tx tx
         Cardano.ShelleyBasedEraConway -> getTxExtended @Conway $ Tx tx
-        _ -> error "fromCardanoTx: era not yet supported"
+        Cardano.ShelleyBasedEraDijkstra -> getTxExtended @Dijkstra $ Tx tx
 
 getTxExtended :: forall era. IsEra era => Tx era -> TxExtended
 getTxExtended tx =

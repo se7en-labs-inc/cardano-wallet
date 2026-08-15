@@ -1441,3 +1441,9 @@ instance IsServerError WriteTx.ErrInvalidTxOutInEra where
                 err400
                 BalanceTxInlinePlutusV4ScriptNotSupportedInConway
                 "Plutus V4 scripts are not supported in the Conway era."
+        WriteTx.GuardNativeScriptNotSupportedInConway ->
+            apiError
+                err400
+                BalanceTxGuardNativeScriptNotSupportedInConway
+                "Native script guard predicates (introduced in Dijkstra) are \
+                \not supported in the Conway era."

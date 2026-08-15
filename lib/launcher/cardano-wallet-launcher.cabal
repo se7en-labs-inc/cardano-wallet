@@ -34,7 +34,7 @@ library
     , filepath
     , fmt
     , http-conduit
-    , iohk-monitoring
+    , iohk-monitoring-extra
     , network
     , process
     , text
@@ -81,7 +81,7 @@ test-suite unit
     , hspec
     , hspec-core
     , hspec-expectations
-    , iohk-monitoring
+    , iohk-monitoring-extra
     , retry
     , text
     , text-class

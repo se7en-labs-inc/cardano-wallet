@@ -107,6 +107,7 @@ import Cardano.Wallet.Read
     , Alonzo
     , Babbage
     , Conway
+    , Dijkstra
     , Era (..)
     , EraValue
     , IsEra (..)
@@ -460,7 +461,7 @@ txOutFromOutput = case theEra :: Era era of
     Alonzo -> \(Outputs os) -> fromAlonzoTxOut <$> toList os
     Babbage -> \(Outputs os) -> fromBabbageTxOut <$> toList os
     Conway -> \(Outputs os) -> fromConwayTxOut <$> toList os
-    Dijkstra -> error "txOutFromOutput: DijkstraEra not yet supported"
+    Dijkstra -> \(Outputs os) -> fromDijkstraTxOut <$> toList os
   where
     fromByronTxOut :: Byron.TxOut -> TxOut
     fromByronTxOut (Byron.TxOut addr amount) =
@@ -489,5 +490,10 @@ txOutFromOutput = case theEra :: Era era of
 
     fromConwayTxOut :: Babbage.BabbageTxOut Conway -> TxOut
     fromConwayTxOut
+        (Babbage.BabbageTxOut addr (MaryValue (Coin amount) _) _ _) =
+            TxOut (SL.serialiseAddr addr) amount
+
+    fromDijkstraTxOut :: Babbage.BabbageTxOut Dijkstra -> TxOut
+    fromDijkstraTxOut
         (Babbage.BabbageTxOut addr (MaryValue (Coin amount) _) _ _) =
             TxOut (SL.serialiseAddr addr) amount

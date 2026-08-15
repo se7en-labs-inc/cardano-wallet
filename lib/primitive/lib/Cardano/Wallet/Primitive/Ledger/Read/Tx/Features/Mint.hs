@@ -69,6 +69,7 @@ import Cardano.Wallet.Primitive.Ledger.Convert
     ( toPlutusScriptInfo
     , toWalletAssetName
     , toWalletScript
+    , toWalletScriptFromDijkstra
     , toWalletTokenPolicyId
     , toWalletTokenQuantity
     )
@@ -333,7 +334,7 @@ fromLedgerScriptToAnyScriptDijkstra
 fromLedgerScriptToAnyScriptDijkstra = toAnyScript
   where
     toAnyScript (Alonzo.NativeScript script) =
-        NativeScript (toWalletScript (const Policy) script) ViaSpending
+        NativeScript (toWalletScriptFromDijkstra (const Policy) script) ViaSpending
     toAnyScript s@(Alonzo.PlutusScript script) =
         PlutusScript
             ( PlutusScriptInfo

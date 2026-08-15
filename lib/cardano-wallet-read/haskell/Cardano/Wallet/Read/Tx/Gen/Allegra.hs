@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Cardano.Wallet.Read.Tx.Gen.Allegra
@@ -56,7 +57,7 @@ import Cardano.Ledger.Core qualified as L
 
 mkAllegraTx
     :: TxParameters
-    -> L.Tx AllegraEra
+    -> L.Tx L.TopTx AllegraEra
 mkAllegraTx TxParameters{txInputs, txOutputs} =
     MkAllegraTx $ ShelleyTx (body txInputs txOutputs) wits aux
 
@@ -66,7 +67,7 @@ aux = maybeToStrictMaybe Nothing
 body
     :: NonEmpty (Index, TxId)
     -> NonEmpty (Address, Lovelace)
-    -> TxBody AllegraEra
+    -> L.TxBody L.TopTx AllegraEra
 body ins outs =
     AllegraTxBody
         (txins ins)
@@ -81,5 +82,5 @@ body ins outs =
 exampleValidity :: ValidityInterval
 exampleValidity = ValidityInterval SNothing SNothing
 
-exampleAllegraTx :: L.Tx AllegraEra
+exampleAllegraTx :: L.Tx L.TopTx AllegraEra
 exampleAllegraTx = mkAllegraTx exampleTxParameters

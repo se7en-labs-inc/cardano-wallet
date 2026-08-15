@@ -38,17 +38,8 @@ module Cardano.Wallet.DB.LayerSpec
     , withinCopiedFile
     ) where
 
-import Cardano.BM.Configuration.Static
-    ( defaultConfigTesting
-    )
 import Cardano.BM.Data.Tracer
     ( nullTracer
-    )
-import Cardano.BM.Extra
-    ( trMessageText
-    )
-import Cardano.BM.Setup
-    ( setupTrace
     )
 import Cardano.BM.Trace
     ( traceInTVarIO
@@ -1083,14 +1074,12 @@ withTestDBFile
     -> (FilePath -> IO a)
     -> IO a
 withTestDBFile action expectations = do
-    logConfig <- defaultConfigTesting
-    trace <- setupTrace (Right logConfig) "connectionSpec"
     withSystemTempFile "spec.db" $ \fp h -> do
         hClose h
         removeFile fp
         withBootDBLayerFromFile
             ShelleyWallet
-            (trMessageText trace)
+            nullTracer
             ti
             testWid
             (Just defaultFieldValues)

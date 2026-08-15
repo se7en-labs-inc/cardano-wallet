@@ -58,7 +58,7 @@ extraSigs = case theEra @era of
     yesExtraSigs (ExtraSigs es) = getExtraSigs es
 
 getExtraSigs
-    :: Set (KeyHash 'Witness)
+    :: Set (KeyHash Guard)
     -> [W.Hash "ExtraSignature"]
 getExtraSigs es =
     toList es <&> \(KeyHash (UnsafeHash h)) -> W.Hash $ fromShort h

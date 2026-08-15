@@ -126,7 +126,6 @@ test-suite unit
     , io-classes
     , io-classes:si-timers
     , io-sim
-    , iohk-monitoring
     , iohk-monitoring-extra
     , lattices
     , lens
@@ -144,7 +143,7 @@ test-suite unit
     , optparse-applicative
     , ouroboros-consensus
     , ouroboros-network
-    , ouroboros-network-api
+    , ouroboros-network:api
     , pathtype
     , persistent
     , persistent-sqlite

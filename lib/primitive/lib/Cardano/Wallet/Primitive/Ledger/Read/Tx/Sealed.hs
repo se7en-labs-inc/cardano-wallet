@@ -23,11 +23,10 @@ import Cardano.Wallet.Read.Eras
     , Alonzo
     , Babbage
     , Conway
+    , Dijkstra
     , Mary
     , Shelley
     )
-import Prelude
-
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Wallet.Primitive.Types.Tx.SealedTx as W
 
@@ -45,4 +44,4 @@ fromCardanoApiTx tx0 = case tx0 of
         Cardano.ShelleyBasedEraAlonzo -> EraValue (Tx tx :: Tx Alonzo)
         Cardano.ShelleyBasedEraBabbage -> EraValue (Tx tx :: Tx Babbage)
         Cardano.ShelleyBasedEraConway -> EraValue (Tx tx :: Tx Conway)
-        _ -> error "fromCardanoApiTx: era not yet supported"
+        Cardano.ShelleyBasedEraDijkstra -> EraValue (Tx tx :: Tx Dijkstra)

@@ -130,6 +130,7 @@ source-repository-package
   type: git
   location: https://github.com/se7en-labs-inc/cardano-ledger-read.git
   tag: b8291391587907662c7a88de152f028a5ad2aec9
+  --sha256: 0qd37h6xsk4sb2zkfp8pybbiji1ihhzb1y5a8kk09h9i7xpryqc0
 
 -- END cardano-ledger-read
 --------------------------------------------------------------------------------
@@ -141,6 +142,7 @@ source-repository-package
   type: git
   location: https://github.com/se7en-labs-inc/cardano-balance-transaction.git
   tag: 980dd9b56daf30c12de92f940cc8ff43e99ef29c
+  --sha256: 1k7c8d89fc3vikmvb86drixiwjc4nv36fgx5xkw1mm5h7a9spxi2
 
 -- END cardano-balance-tx
 --------------------------------------------------------------------------------
@@ -153,6 +155,7 @@ source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-ledger
   tag: f3104f00f9819ba94de119c38bc3e0109982821f
+  --sha256: 06cd332dwmqqvipfgyg3dg5a8d003yh16vyv1gwk0hfpln7afi1w
   subdir:
     libs/cardano-data
     libs/cardano-ledger-api
@@ -176,11 +179,13 @@ source-repository-package
   type: git
   location: https://github.com/IntersectMBO/ouroboros-consensus
   tag: 6dc84b8fead9226dada19ca26d8eb59e0000c388
+  --sha256: 01lnlnwjar1970a49h5xyckdc6ajrg5xpxaifcmanz724s4zvrwv
 
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/typed-protocols
   tag: 9b4627221ae5d649f2303c6926a8dba3f9934658
+  --sha256: 1qm0m8svsq2zp5lilb2598fwah8pw2r8li026gbnil8ih9aj96z7
   subdir:
     typed-protocols
 
@@ -188,6 +193,7 @@ source-repository-package
   type: git
   location: https://github.com/IntersectMBO/ouroboros-network
   tag: 4b3ab7664f609a1aee0f0c24dcfcfd0ab899fc42
+  --sha256: 141b5mrbicq9zssylpbk7a2jfn0djkckhqnsl6nxgci1dhisk2kw
   subdir:
     ouroboros-network
     cardano-diffusion
@@ -198,6 +204,7 @@ source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-api
   tag: f5ee53d4c26bd0d36540a2a6d06899ff9376aa9b
+  --sha256: 1xzg1mc0ym4qbyp9vb1czddna6jrr7vlwcr5nh6nwyb5055bzqas
   subdir:
     cardano-api
     cardano-api-gen
@@ -206,11 +213,13 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/ekg-forward
   tag: 85470ae7e8fac9711682234ed39a36eec3d45a9b
+  --sha256: 05fg9djcwwmf2jxbhfjbsjf558xqkrv4x134wric2ll9nqdbnkna
 
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-base
   tag: 9c6078d9c39c542abcb5912d0d7c222b7ba8a03d
+  --sha256: 06pn6mlbpskb35rpnsjwl5zrwhcaa1640hs2rklpyvddg0qyiz0m
   subdir:
     cardano-binary
     cardano-crypto-class
@@ -221,6 +230,7 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/kes-agent
   tag: 4e7ec7b5102a030587413f4af770e87a15c9cb9c
+  --sha256: 0h4cb50sg42wl7bnj7l1yp1dhxkqqxrkjs4n3i3n9jx7rv5w2j9r
   subdir:
     kes-agent
     kes-agent-crypto

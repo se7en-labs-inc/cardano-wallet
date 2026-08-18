@@ -564,6 +564,7 @@
             }
             // lib.optionalAttrs buildPlatform.isLinux {
               wallet-key-export-static = staticPackages.wallet-key-export;
+              inherit staticPackages;
             }
             //
 

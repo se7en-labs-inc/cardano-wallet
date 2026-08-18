@@ -1160,6 +1160,8 @@ unsealShelleyTx era wtx = case W.cardanoTxIdeallyNoLaterThan era wtx of
         Right $ TxInMode ShelleyBasedEraBabbage tx
     Cardano.InAnyCardanoEra ConwayEra tx ->
         Right $ TxInMode ShelleyBasedEraConway tx
+    Cardano.InAnyCardanoEra DijkstraEra tx ->
+        Right $ TxInMode ShelleyBasedEraDijkstra tx
     Cardano.InAnyCardanoEra unsupportedEra _ ->
         Left $ UnsealedTxInUnsupportedEra $ AnyCardanoEra unsupportedEra
 

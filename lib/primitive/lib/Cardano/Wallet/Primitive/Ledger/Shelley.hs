@@ -933,6 +933,7 @@ toCardanoTxOut
 toCardanoTxOut era refScriptM = case era of
     ShelleyBasedEraBabbage -> toBabbageTxOut
     ShelleyBasedEraConway -> toConwayTxOut
+    ShelleyBasedEraDijkstra -> toDijkstraTxOut
     _ ->
         error
             $ "toCardanoTxOut: Creating transactions in era "
@@ -1002,6 +1003,41 @@ toCardanoTxOut era refScriptM = case era of
                 "toCardanoTxOut: malformed address"
                 [ Cardano.AddressInEra
                     (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraConway)
+                    <$> eitherToMaybe
+                        (Cardano.deserialiseFromRawBytes (AsAddress AsShelleyAddr) addr)
+                , Cardano.AddressInEra Cardano.ByronAddressInAnyEra
+                    <$> eitherToMaybe
+                        (Cardano.deserialiseFromRawBytes (AsAddress AsByronAddr) addr)
+                ]
+
+    toDijkstraTxOut
+        :: HasCallStack => W.TxOut -> Cardano.TxOut ctx Cardano.DijkstraEra
+    toDijkstraTxOut (W.TxOut (W.Address addr) tokens) =
+        Cardano.TxOut
+            addrInEra
+            ( Cardano.TxOutValueShelleyBased Cardano.ShelleyBasedEraDijkstra
+                $ Cardano.toLedgerValue Cardano.MaryEraOnwardsDijkstra
+                $ toCardanoValue tokens
+            )
+            datumHash
+            refScript
+      where
+        refScript = case refScriptM of
+            Nothing ->
+                Cardano.ReferenceScriptNone
+            Just script ->
+                let aux = Cardano.BabbageEraOnwardsDijkstra
+                    scriptApi =
+                        Cardano.toScriptInAnyLang
+                            $ Cardano.SimpleScript
+                            $ toCardanoSimpleScript script
+                in  Cardano.ReferenceScript aux scriptApi
+        datumHash = Cardano.TxOutDatumNone
+        addrInEra =
+            tina
+                "toCardanoTxOut: malformed address"
+                [ Cardano.AddressInEra
+                    (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraDijkstra)
                     <$> eitherToMaybe
                         (Cardano.deserialiseFromRawBytes (AsAddress AsShelleyAddr) addr)
                 , Cardano.AddressInEra Cardano.ByronAddressInAnyEra

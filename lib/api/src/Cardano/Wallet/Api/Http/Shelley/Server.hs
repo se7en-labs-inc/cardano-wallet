@@ -903,8 +903,10 @@ import UnliftIO.Concurrent
     ( threadDelay
     )
 import UnliftIO.Exception
-    ( tryAny
+    ( SomeException
+    , isAsyncException
     , tryAnyDeep
+    , tryJust
     )
 import Prelude
 
@@ -5857,7 +5859,11 @@ postTransactionContext ctx wid@(ApiT walletId) request =
         (const $ throwDapp DappContextUnavailableError)
         $ \worker -> do
             result <-
-                liftIO $ tryAny $ resolveTransactionContext @n ctx worker wid request
+                liftIO
+                    $ tryJust
+                        ( \(exception :: SomeException) -> if isAsyncException exception then Nothing else Just exception
+                        )
+                    $ resolveTransactionContext @n ctx worker wid request
             case result of
                 Left _ -> throwDapp DappInternalErrorResponse
                 Right resolved -> either throwDapp pure resolved

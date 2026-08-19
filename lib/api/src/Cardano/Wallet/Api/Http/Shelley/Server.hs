@@ -520,6 +520,7 @@ import Cardano.Wallet.Compat
 import Cardano.Wallet.DB
     ( DBFactory (..)
     , DBLayer
+    , ErrContextAccountChanged (..)
     )
 import Cardano.Wallet.DRep.Layer
     ( DRepInfo (..)
@@ -904,6 +905,7 @@ import UnliftIO.Concurrent
     )
 import UnliftIO.Exception
     ( SomeException
+    , fromException
     , isAsyncException
     , tryAnyDeep
     , tryJust
@@ -1964,6 +1966,7 @@ deleteWallet ctx (ApiT wid) = do
         (const $ pure ())
         (const $ pure ())
 
+    liftIO $ markDatabaseDeleted df wid
     liftIO $ Registry.unregister re wid
     liftIO $ removeDatabase df wid
 
@@ -5865,7 +5868,10 @@ postTransactionContext ctx wid@(ApiT walletId) request =
                         )
                     $ resolveTransactionContext @n ctx worker wid request
             case result of
-                Left _ -> throwDapp DappInternalErrorResponse
+                Left exception
+                    | Just ErrContextAccountChanged <- fromException exception ->
+                        throwDapp DappAccountChangedError
+                    | otherwise -> throwDapp DappInternalErrorResponse
                 Right resolved -> either throwDapp pure resolved
   where
     throwDapp = Handler . throwE . dappServerError

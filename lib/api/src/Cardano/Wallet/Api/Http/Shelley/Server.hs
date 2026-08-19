@@ -99,6 +99,7 @@ module Cardano.Wallet.Api.Http.Shelley.Server
     , balanceTransaction
     , decodeTransaction
     , submitTransaction
+    , postTransactionContext
     , getPolicyKey
     , postPolicyKey
     , postPolicyId
@@ -328,6 +329,7 @@ import Cardano.Wallet.Api
 import Cardano.Wallet.Api.Http.Server.Error
     ( IsServerError (..)
     , apiError
+    , dappServerError
     , handler
     , liftE
     , liftHandler
@@ -340,6 +342,9 @@ import Cardano.Wallet.Api.Http.Server.Handlers.NetworkInformation
 import Cardano.Wallet.Api.Http.Server.Handlers.TxCBOR
     ( ParsedTxCBOR (..)
     , parseTxCBOR
+    )
+import Cardano.Wallet.Api.Http.Shelley.TransactionContext
+    ( resolveTransactionContext
     )
 import Cardano.Wallet.Api.Types
     ( AccountPostData (..)
@@ -481,8 +486,13 @@ import Cardano.Wallet.Api.Types.Certificate
     ( ApiRewardAccount (..)
     , mkApiAnyCertificate
     )
+import Cardano.Wallet.Api.Types.Dapp.Context
+    ( ApiDappTransactionContextRequest
+    , ApiDappTransactionContextResponse
+    )
 import Cardano.Wallet.Api.Types.Error
     ( ApiErrorInfo (..)
+    , DappError (..)
     )
 import Cardano.Wallet.Api.Types.Key
     ( computeKeyPayload
@@ -763,6 +773,7 @@ import Control.Tracer
     )
 import Cryptography.Core
     ( genSalt
+    , getRandomBytes
     )
 import Data.Bifunctor
     ( first
@@ -892,7 +903,8 @@ import UnliftIO.Concurrent
     ( threadDelay
     )
 import UnliftIO.Exception
-    ( tryAnyDeep
+    ( tryAny
+    , tryAnyDeep
     )
 import Prelude
 
@@ -5830,6 +5842,28 @@ toApiSerialisedTransaction maybeEncoding tx =
             (ApiT $ sealWriteTx Write.recentEra tx)
             encoding
 
+postTransactionContext
+    :: forall n s
+     . HasSNetworkId n
+    => ApiLayer s
+    -> ApiT WalletId
+    -> ApiDappTransactionContextRequest
+    -> Handler ApiDappTransactionContextResponse
+postTransactionContext ctx wid@(ApiT walletId) request =
+    withWorkerCtx
+        ctx
+        walletId
+        (const $ throwDapp DappAccountChangedError)
+        (const $ throwDapp DappContextUnavailableError)
+        $ \worker -> do
+            result <-
+                liftIO $ tryAny $ resolveTransactionContext @n ctx worker wid request
+            case result of
+                Left _ -> throwDapp DappInternalErrorResponse
+                Right resolved -> either throwDapp pure resolved
+  where
+    throwDapp = Handler . throwE . dappServerError
+
 {-------------------------------------------------------------------------------
                                 Api Layer
 -------------------------------------------------------------------------------}
@@ -5858,7 +5892,21 @@ newApiLayer tr g0 nw tl df tokenMeta coworker = do
     let trTx = contramap MsgSubmitSealedTx tr
     let trW = contramap MsgWalletWorker tr
     locks <- Concierge.newConcierge
-    let ctx = ApiLayer trTx trW g0 nw tl df re locks tokenMeta
+    processGeneration <- getRandomBytes 16
+    hmacKey <- getRandomBytes 32
+    let ctx =
+            ApiLayer
+                trTx
+                trW
+                g0
+                nw
+                tl
+                df
+                re
+                locks
+                tokenMeta
+                processGeneration
+                hmacKey
     listDatabases df >>= mapM_ (startWalletWorker ctx coworker)
     return ctx
 

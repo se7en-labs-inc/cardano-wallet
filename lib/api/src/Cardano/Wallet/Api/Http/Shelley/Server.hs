@@ -5848,9 +5848,9 @@ toApiSerialisedTransaction maybeEncoding tx =
             encoding
 
 postTransactionContext
-    :: forall n s
+    :: forall n
      . HasSNetworkId n
-    => ApiLayer s
+    => ApiLayer (SeqState n ShelleyKey)
     -> ApiT WalletId
     -> ApiDappTransactionContextRequest
     -> Handler ApiDappTransactionContextResponse

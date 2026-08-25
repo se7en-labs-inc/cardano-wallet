@@ -5977,7 +5977,7 @@ postDappWitnesses ctx (ApiT walletId) request = do
             (toText walletId)
             contextRequest
             request.context
-        transactions <- first (const InvalidDappRequest) $ mapM decodeDappTx contextRequest.transactions
+        transactions <- mapM decodeDappTx contextRequest.transactions
         first (const DappContextConflictError)
             $ validateTransactionContextResponseForRequest contextRequest request.context
         inventory <- buildReviewedProofInventory transactions request.context

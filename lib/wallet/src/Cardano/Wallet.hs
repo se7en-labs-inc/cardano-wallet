@@ -263,7 +263,9 @@ import Cardano.Address.Script
     ( Cosigner (..)
     )
 import Cardano.Api.Extra
-    ( cardanoApiEraConstraints
+    ( CardanoApiEra
+    , cardanoApiEraConstraints
+    , toCardanoApiTx
     )
 import Cardano.Balance.Tx.Balance
     ( ChangeAddressGen (..)
@@ -3161,7 +3163,7 @@ buildSignSubmitTransaction
                                     (Just Pending)
                                     Nothing
                                     Nothing
-                        txWithSlot@(_builtTx, _slot) <-
+                        txWithSlot <-
                             ( throwOnErr
                                 <=< (Delta.onDBVar walletState . Delta.updateWithResultAndError)
                             )

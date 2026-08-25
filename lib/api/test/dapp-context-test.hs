@@ -25,7 +25,7 @@ import Cardano.Ledger.Coin
     )
 import Cardano.Ledger.Conway.TxCert
     ( ConwayDelegCert (ConwayRegCert, ConwayRegDelegCert, ConwayUnRegCert)
-    , ConwayGovCert (ConwayUpdateDRep)
+    , ConwayGovCert (ConwayRegDRep, ConwayUnRegDRep, ConwayUpdateDRep)
     , ConwayTxCert (ConwayTxCertDeleg, ConwayTxCertGov)
     , Delegatee (DelegVote)
     )
@@ -429,6 +429,7 @@ main = hspec $ do
                     [ (InvalidDappRequest, 400)
                     , (DappContextConflictError, 400)
                     , (DappTxProofGenerationError, 403)
+                    , (DappDeprecatedCertificateError, 403)
                     , (DappDataProofGenerationError, 403)
                     , (DappDataAddressNotPkError, 403)
                     , (DappInternalErrorResponse, 500)
@@ -542,10 +543,30 @@ main = hspec $ do
                     )
                 ,
                     ( ConwayTxCertGov
+                        $ ConwayRegDRep (coerce stakeCredential) (Coin 1) Strict.SNothing
+                    , True
+                    )
+                ,
+                    ( ConwayTxCertGov $ ConwayUnRegDRep (coerce stakeCredential) (Coin 1)
+                    , True
+                    )
+                ,
+                    ( ConwayTxCertGov
                         $ ConwayUpdateDRep (coerce stakeCredential) Strict.SNothing
-                    , False
+                    , True
                     )
                 ]
+            fmap (const ()) (decodeDappTx $ ApiDappHex acceptedTransaction)
+                `shouldBe` Right ()
+            fmap (const ()) (decodeDappTx $ ApiDappHex rejectedTransaction)
+                `shouldBe` Left InvalidDappRequest
+        it "classifies legacy Genesis and MIR certificates as deprecated"
+            $ mapM_
+                ( \transaction ->
+                    fmap (const ()) (decodeDappTx $ ApiDappHex transaction)
+                        `shouldBe` Left DappDeprecatedCertificateError
+                )
+                [legacyGenesisTransaction, legacyMirTransaction]
         it "extracts only valid matching pending stake certificate effects" $ do
             let stakeCredential = KeyHashObj $ coerce $ witnessKeyHash proofHash
                 foreignCredential =
@@ -1185,6 +1206,30 @@ rejectedTransaction :: ByteString
 rejectedTransaction =
     hex
         "84a30081825820111111111111111111111111111111111111111111111111111111111111111100018182581d60aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1a000f42400200a0f4f6"
+
+legacyGenesisTransaction :: ByteString
+legacyGenesisTransaction =
+    legacyTransaction
+        $ "8405581c"
+            <> T.replicate 56 "1"
+            <> "581c"
+            <> T.replicate 56 "2"
+            <> "5820"
+            <> T.replicate 64 "3"
+
+legacyMirTransaction :: ByteString
+legacyMirTransaction = legacyTransaction "82068200a0"
+
+legacyTransaction :: Text -> ByteString
+legacyTransaction certificate =
+    hex
+        $ "83a50081825820"
+            <> T.replicate 64 "0"
+            <> "00018182581d60"
+            <> T.replicate 56 "a"
+            <> "00020003000481"
+            <> certificate
+            <> "a0f6"
 
 hex :: Text -> ByteString
 hex =

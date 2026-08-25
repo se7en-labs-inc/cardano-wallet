@@ -450,6 +450,7 @@ captureContext worker =
             pending <-
                 first (const DappContextUnavailableError)
                     $ mapM decodeDurable (filter hasLiveClaim durable)
+
             checkpoint <-
                 Set.fromList
                     <$> first

@@ -1268,7 +1268,7 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                     either
                         (fail . show)
                         pure
-                        $ TxCBOR.deserializeConwayTxWithOutputBytes
+                        $ TxCBOR.deserializeTxWithOutputBytes @Read.Conway
                         $ BL.fromStrict
                         $ serialisedTx
                             sealed

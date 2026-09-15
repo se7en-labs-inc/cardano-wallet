@@ -132,7 +132,7 @@ import Cardano.Ledger.Binary
     )
 import Cardano.Read.Ledger.Tx.CBOR
     ( TxWithOutputBytes (..)
-    , deserializeConwayTxWithOutputBytes
+    , deserializeTxWithOutputBytes
     , deserializeTx
     )
 import Cardano.Read.Ledger.Tx.Output
@@ -482,7 +482,7 @@ decodeDurable DurableSubmission{durableTxId = TxId txId, durableSealedTx} =
 decodeTx :: ApiDappHex -> Either String DecodedTx
 decodeTx (ApiDappHex bytes) = do
     TxWithOutputBytes{transaction, outputsWithBytes} <-
-        first show $ deserializeConwayTxWithOutputBytes $ BL.fromStrict bytes
+        first show $ deserializeTxWithOutputBytes @Read.Conway $ BL.fromStrict bytes
     let txId = txIdBytes $ Read.getTxId transaction
         normal = Read.getInputs transaction
         collateral = Read.getCollateralInputs transaction

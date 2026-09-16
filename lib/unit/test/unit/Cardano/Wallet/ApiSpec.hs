@@ -285,10 +285,12 @@ assertEndpointError request' status code expected response
   where
     isDappBackend req = case pathInfo req of
         "v2" : "wallets" : _walletId : route : _
-            | route `elem` ["transaction-context", "transaction-witnesses"] ->
+            | route
+                `elem` ["transaction-context", "transaction-witnesses", "data-signatures"] ->
                 True
         "wallets" : _walletId : route : _
-            | route `elem` ["transaction-context", "transaction-witnesses"] ->
+            | route
+                `elem` ["transaction-context", "transaction-witnesses", "data-signatures"] ->
                 True
         _ -> False
 

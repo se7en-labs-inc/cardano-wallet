@@ -493,6 +493,7 @@ import Cardano.Wallet.DB.Store.Submissions.Operations
     , DurableSubmissionInput (..)
     , DurableSubmissionInsert (..)
     , TxSubmissionsStatus
+    , isRollbackConflict
     )
 import Cardano.Wallet.DB.Sqlite.Types
     ( DappSubmissionInputRole (..)
@@ -3158,6 +3159,7 @@ buildSignSubmitTransaction
                                 nullTracer
                                 db
                                 netLayer
+                                False
                                 txResolved
                                 builtSealedTx
                                 (expiry builtTxMeta)
@@ -3220,6 +3222,7 @@ buildSignSubmitTransaction
                                 nullTracer
                                 db
                                 netLayer
+                                False
                                 builtTx
                                 builtSealedTx
                                 (expiry builtTxMeta)
@@ -3875,11 +3878,12 @@ submitWalletScoped
     => Tracer m TxSubmitLog
     -> DBLayer m s
     -> NetworkLayer m block
+    -> Bool -- ^ DApp request: refuse a new broadcast outside Conway.
     -> Tx
     -> SealedTx
     -> Maybe SlotNo
     -> ExceptT ErrSubmitTx m DappSubmissionStatusEnum
-submitWalletScoped tr DBLayer{..} nw tx sealed expiration = do
+submitWalletScoped tr DBLayer{..} nw conwayOnly tx sealed expiration = do
     let normal = claim NormalInputE <$> map fst (resolvedInputs tx)
         collateral = claim CollateralInputE <$> map fst (resolvedCollateralInputs tx)
         claims = normal <> collateral
@@ -3915,7 +3919,12 @@ submitWalletScoped tr DBLayer{..} nw tx sealed expiration = do
         DurableSubmissionInput (Sql.TxId inputId) inputIx role
     claimOutpoint DurableSubmissionInput{durableInputTxId, durableInputIndex} =
         (durableInputTxId, durableInputIndex)
+    requireConway = when conwayOnly $ do
+        lift (currentNodeEra nw) >>= \case
+            Read.EraValue Read.Conway -> pure ()
+            _ -> throwE ErrSubmitTxDappUnsupportedEra
     broadcast authorized = do
+        requireConway
         started <- lift getCurrentTime
         mBroadcasting <-
             lift
@@ -3994,6 +4003,7 @@ submitTx tr db nw BuiltTx{builtTx, builtTxMeta, builtSealedTx} =
             (contramap (MsgWallet . MsgTxSubmit) tr)
             db
             nw
+            False
             builtTx
             builtSealedTx
             (expiry builtTxMeta)
@@ -4203,7 +4213,7 @@ runLocalTxSubmissionPool cfg ctx = do
             forM_ rows $ \row ->
                 when
                     ( durableStatus row
-                        `elem` [AuthorizedE, SubmittedE, OutcomeUnknownE]
+                        `elem` [AuthorizedE, SubmittedE, OutcomeUnknownE, InLedgerDappE]
                     )
                     $ reconcileRow lookupTxAt saveRow row 3
     reconcileRow lookupTxAt saveRow row attempts
@@ -4238,6 +4248,7 @@ runLocalTxSubmissionPool cfg ctx = do
                 row
                     { durableAuthorized = False
                     , durableStatus = SubmittedE
+                    , durableAcceptance = Nothing
                     }
         | maybe False (< tipSlot tip) (durableExpiration row) =
             Just
@@ -4245,14 +4256,12 @@ runLocalTxSubmissionPool cfg ctx = do
                     { durableAuthorized = False
                     , durableStatus = ExpiredDappE
                     }
-        | durableStatus row == OutcomeUnknownE =
+        | durableStatus row == InLedgerDappE || isRollbackConflict row =
             Just
                 row
-                    { durableAuthorized = True
-                    , durableStatus = AuthorizedE
-                    , durableAttemptGeneration = durableAttemptGeneration row + 1
-                    , durableBroadcastGeneration = Nothing
-                    , durableBroadcastStarted = Nothing
+                    { durableAuthorized = False
+                    , durableStatus = SubmittedE
+                    , durableAcceptance = Nothing
                     }
         | otherwise = Nothing
     tipSlot = \case
@@ -5479,6 +5488,7 @@ data ErrSubmitTx
     | ErrSubmitTxImpossible ErrNoSuchTransaction
     | ErrSubmitTxIdentityConflict
     | ErrSubmitTxInputConflict
+    | ErrSubmitTxDappUnsupportedEra
     | ErrSubmitTxOutcomeUnknown
     deriving (Show, Eq)
 

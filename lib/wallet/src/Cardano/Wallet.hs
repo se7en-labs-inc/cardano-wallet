@@ -3997,7 +3997,7 @@ submitTx
     -> NetworkLayer m block
     -> BuiltTx
     -> ExceptT ErrSubmitTx m ()
-submitTx tr db nw BuiltTx{builtTx, builtTxMeta, builtSealedTx} =
+submitTx tr db nw BuiltTx{builtTx, builtTxMeta, builtSealedTx} = do
     void
         $ submitWalletScoped
             (contramap (MsgWallet . MsgTxSubmit) tr)
@@ -4007,6 +4007,9 @@ submitTx tr db nw BuiltTx{builtTx, builtTxMeta, builtSealedTx} =
             builtTx
             builtSealedTx
             (expiry builtTxMeta)
+    lift $ db & \DBLayer{atomicallyWithContextChange, putTxHistory} ->
+        atomicallyWithContextChange PendingContextChange
+            $ putTxHistory [(builtTx, builtTxMeta)]
 
 -- | Broadcast an externally-signed transaction to the network.
 --

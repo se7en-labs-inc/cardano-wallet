@@ -144,3 +144,4 @@ test-suite unit
   other-modules:
     Cardano.Wallet.Network.Checkpoints.PolicySpec
     Cardano.Wallet.Network.LightSpec
+    Cardano.Wallet.Network.LocalStateQuery.RewardAccountSpec

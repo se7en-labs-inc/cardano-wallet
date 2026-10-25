@@ -172,6 +172,7 @@ dummyNetworkLayer =
         , postTx = err "postTx"
         , stakeDistribution = err "stakeDistribution"
         , getCachedRewardAccountBalance = err "getRewardCachedAccountBalance"
+        , getCachedVoteDelegation = err "getCachedVoteDelegation"
         , fetchRewardAccountBalances = err "fetchRewardAccountBalances"
         , timeInterpreter = err "timeInterpreter"
         , syncProgress = err "syncProgress"

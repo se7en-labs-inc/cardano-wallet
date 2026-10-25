@@ -57,6 +57,7 @@ import Cardano.Wallet.Primitive.Types.Coin
     )
 import Cardano.Wallet.Primitive.Types.DRep
     ( DRepRegistration
+    , VoteDelegation
     )
 import Cardano.Wallet.Primitive.Types.ProtocolParameters
     ( ProtocolParameters
@@ -178,6 +179,16 @@ data NetworkLayer m block = NetworkLayer
     --
     -- If there is no cached value, it will return `Coin 0`, and add the
     -- account to the internal set of observed account, such that it will be
+    -- fetched later.
+    , getCachedVoteDelegation
+        :: RewardAccount
+        -> m (Maybe VoteDelegation)
+    -- ^ Return the cached vote delegation of an account, which comes from
+    -- the same read of the ledger as its cached reward balance.
+    --
+    -- Returns 'Nothing' if there is no cached value, or if the node was in
+    -- an era before Conway at the last read. In the first case, it adds the
+    -- account to the internal set of observed accounts, such that it will be
     -- fetched later.
     , fetchRewardAccountBalances
         :: Set RewardAccount

@@ -3311,6 +3311,42 @@ components:
           epoch_number: 14
           epoch_start_time: 2020-01-22T10:06:39.037Z
 
+    ApiWalletLedgerVote: &ApiWalletLedgerVote
+      description: |
+        The vote delegation that the ledger holds for the wallet's reward
+        account, as of the wallet's last read of it, which runs when the node
+        tip changes. Absent until the wallet has read it, and in eras before
+        Conway.
+
+        `active` and `next` report the certificates in the wallet's own
+        transactions. This field also reflects changes made outside them: the
+        retirement of a DRep removes the vote delegation of every account
+        delegated to it. From protocol version 10 the ledger refuses a
+        withdrawal from a key-hash reward account that has no vote delegation.
+      oneOf:
+        - type: object
+          title: vote delegated
+          additionalProperties: false
+          required:
+            - status
+            - voting
+          properties:
+            status:
+              type: string
+              enum:
+                - delegated
+            voting: *ApiDRep
+        - type: object
+          title: no vote delegation
+          additionalProperties: false
+          required:
+            - status
+          properties:
+            status:
+              type: string
+              enum:
+                - not_delegated
+
     ApiWalletDelegation: &ApiWalletDelegation
       description: Delegation settings
       type: object
@@ -3333,6 +3369,7 @@ components:
         next:
           type: array
           items: *ApiWalletDelegationNext
+        ledger_vote: *ApiWalletLedgerVote
 
     ApiWallet: &ApiWallet
       type: object

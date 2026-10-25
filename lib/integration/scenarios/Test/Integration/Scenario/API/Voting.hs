@@ -109,6 +109,7 @@ import Test.Integration.Framework.DSL
     , postWallet
     , quitStakePool
     , request
+    , shouldHaveDelegationHistory
     , signTx
     , submitTxWithWid
     , suggestedDReps
@@ -138,7 +139,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
         getSrcWallet ctx src
             >>= flip
                 verify
-                [ expectField #delegation (`shouldBe` notDelegating [])
+                [ expectField
+                    #delegation
+                    (`shouldHaveDelegationHistory` notDelegating [])
                 ]
 
         -- voting and re-voting
@@ -240,7 +243,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                     verify
                     [ expectField
                         #delegation
-                        (`shouldBe` votingAndDelegating (ApiT pool1) voting2 [])
+                        ( `shouldHaveDelegationHistory`
+                            votingAndDelegating (ApiT pool1) voting2 []
+                        )
                     ]
 
     it "VOTING_01b - Can vote and revote after delegation" $ \ctx -> runResourceT $ do
@@ -332,7 +337,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
             getSrcWallet ctx src
                 >>= flip
                     verify
-                    [ expectField #delegation (`shouldBe` delegating (ApiT pool1) [])
+                    [ expectField
+                        #delegation
+                        (`shouldHaveDelegationHistory` delegating (ApiT pool1) [])
                     ]
 
         -- we get rewards and try to withdraw
@@ -460,7 +467,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` votingAndDelegating (ApiT pool1) voting1 [])
+                            ( `shouldHaveDelegationHistory`
+                                votingAndDelegating (ApiT pool1) voting1 []
+                            )
                         ]
 
         let voteAbstain =
@@ -555,7 +564,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                     verify
                     [ expectField
                         #delegation
-                        (`shouldBe` votingAndDelegating (ApiT pool1) voting2 [])
+                        ( `shouldHaveDelegationHistory`
+                            votingAndDelegating (ApiT pool1) voting2 []
+                        )
                     ]
 
         withdrawalSucesss <- do
@@ -603,7 +614,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
         getSrcWallet ctx src
             >>= flip
                 verify
-                [ expectField #delegation (`shouldBe` notDelegating [])
+                [ expectField
+                    #delegation
+                    (`shouldHaveDelegationHistory` notDelegating [])
                 ]
 
         -- First vote abstain and delegating to pool1
@@ -714,7 +727,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                     verify
                     [ expectField
                         #delegation
-                        (`shouldBe` votingAndDelegating (ApiT pool1) voting1 [])
+                        ( `shouldHaveDelegationHistory`
+                            votingAndDelegating (ApiT pool1) voting1 []
+                        )
                     ]
 
         -- Second vote no confidence and delegating to pool2
@@ -819,7 +834,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                     verify
                     [ expectField
                         #delegation
-                        (`shouldBe` votingAndDelegating (ApiT pool2) voting2 [])
+                        ( `shouldHaveDelegationHistory`
+                            votingAndDelegating (ApiT pool2) voting2 []
+                        )
                     ]
 
         -- we get rewards
@@ -882,7 +899,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
         getSrcWallet ctx src
             >>= flip
                 verify
-                [ expectField #delegation (`shouldBe` notDelegating [])
+                [ expectField
+                    #delegation
+                    (`shouldHaveDelegationHistory` notDelegating [])
                 ]
 
         -- Join Pool 1
@@ -928,7 +947,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                     verify
                     [ expectField
                         #delegation
-                        (`shouldBe` votingAndDelegating (ApiT pool1) voting [])
+                        ( `shouldHaveDelegationHistory`
+                            votingAndDelegating (ApiT pool1) voting []
+                        )
                     ]
 
         -- Join Pool 2
@@ -1054,7 +1075,10 @@ spec = describe "VOTING_TRANSACTIONS" $ do
             getSrcWallet ctx src
                 >>= flip
                     verify
-                    [expectField #delegation (`shouldBe` notDelegating [])]
+                    [ expectField
+                        #delegation
+                        (`shouldHaveDelegationHistory` notDelegating [])
+                    ]
 
     it "VOTING_01e - Cannot vote in Babbage"
         $ \ctx -> runResourceT $ do
@@ -1078,7 +1102,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` notDelegating [])
+                            (`shouldHaveDelegationHistory` notDelegating [])
                         ]
 
             let voting1 = Abstain
@@ -1094,7 +1118,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` onlyVoting (ApiT voting1) [])
+                            (`shouldHaveDelegationHistory` onlyVoting (ApiT voting1) [])
                         ]
 
             let voting2 = NoConfidence
@@ -1110,7 +1134,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` onlyVoting (ApiT voting2) [])
+                            (`shouldHaveDelegationHistory` onlyVoting (ApiT voting2) [])
                         ]
 
             rTx3 <- joinDRep @n ctx (SpecificDRep voting2) (w, fixturePassphrase)
@@ -1132,7 +1156,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` notDelegating [])
+                            (`shouldHaveDelegationHistory` notDelegating [])
                         ]
 
             pool1 : _pool2 : _ <- map (view #id) <$> notRetiringPools ctx
@@ -1151,7 +1175,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` votingAndDelegating (ApiT pool1) (ApiT voting1) [])
+                            ( `shouldHaveDelegationHistory`
+                                votingAndDelegating (ApiT pool1) (ApiT voting1) []
+                            )
                         ]
 
             let voting2 = NoConfidence
@@ -1167,7 +1193,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` votingAndDelegating (ApiT pool1) (ApiT voting2) [])
+                            ( `shouldHaveDelegationHistory`
+                                votingAndDelegating (ApiT pool1) (ApiT voting2) []
+                            )
                         ]
 
             rTx3 <- joinDRep @n ctx (SpecificDRep voting2) (w, fixturePassphrase)
@@ -1189,7 +1217,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` notDelegating [])
+                            (`shouldHaveDelegationHistory` notDelegating [])
                         ]
 
             pool1 : pool2 : _ <- map (view #id) <$> notRetiringPools ctx
@@ -1207,7 +1235,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` onlyVoting (ApiT voting) [])
+                            (`shouldHaveDelegationHistory` onlyVoting (ApiT voting) [])
                         ]
 
             -- Join Pool
@@ -1223,7 +1251,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` votingAndDelegating (ApiT pool1) (ApiT voting) [])
+                            ( `shouldHaveDelegationHistory`
+                                votingAndDelegating (ApiT pool1) (ApiT voting) []
+                            )
                         ]
             rJoin2 <-
                 joinStakePool @n ctx (SpecificPool pool2) (w, fixturePassphrase)
@@ -1237,7 +1267,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` votingAndDelegating (ApiT pool2) (ApiT voting) [])
+                            ( `shouldHaveDelegationHistory`
+                                votingAndDelegating (ApiT pool2) (ApiT voting) []
+                            )
                         ]
 
     it
@@ -1252,7 +1284,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` notDelegating [])
+                            (`shouldHaveDelegationHistory` notDelegating [])
                         ]
 
             pool1 : pool2 : _ <- map (view #id) <$> notRetiringPools ctx
@@ -1272,7 +1304,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` votingAndDelegating (ApiT pool1) (ApiT voting1) [])
+                            ( `shouldHaveDelegationHistory`
+                                votingAndDelegating (ApiT pool1) (ApiT voting1) []
+                            )
                         ]
 
             let voting2 = NoConfidence
@@ -1288,7 +1322,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` votingAndDelegating (ApiT pool1) (ApiT voting2) [])
+                            ( `shouldHaveDelegationHistory`
+                                votingAndDelegating (ApiT pool1) (ApiT voting2) []
+                            )
                         ]
 
             -- Rejoin Pool
@@ -1304,7 +1340,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` votingAndDelegating (ApiT pool2) (ApiT voting2) [])
+                            ( `shouldHaveDelegationHistory`
+                                votingAndDelegating (ApiT pool2) (ApiT voting2) []
+                            )
                         ]
 
     it
@@ -1319,7 +1357,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` notDelegating [])
+                            (`shouldHaveDelegationHistory` notDelegating [])
                         ]
 
             let voting = NoConfidence
@@ -1335,7 +1373,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` onlyVoting (ApiT voting) [])
+                            (`shouldHaveDelegationHistory` onlyVoting (ApiT voting) [])
                         ]
 
             -- delete the wallet
@@ -1358,7 +1396,7 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` onlyVoting (ApiT voting) [])
+                            (`shouldHaveDelegationHistory` onlyVoting (ApiT voting) [])
                         ]
 
             pool1 : _ : _ <- map (view #id) <$> notRetiringPools ctx
@@ -1376,7 +1414,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                         verify
                         [ expectField
                             #delegation
-                            (`shouldBe` votingAndDelegating (ApiT pool1) (ApiT voting) [])
+                            ( `shouldHaveDelegationHistory`
+                                votingAndDelegating (ApiT pool1) (ApiT voting) []
+                            )
                         ]
 
             -- delete the wallet once again
@@ -1400,7 +1440,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                             verify
                             [ expectField
                                 #delegation
-                                (`shouldBe` votingAndDelegating (ApiT pool1) (ApiT voting) [])
+                                ( `shouldHaveDelegationHistory`
+                                    votingAndDelegating (ApiT pool1) (ApiT voting) []
+                                )
                             ]
     it "DREPS_01 - listDReps returns 200 with a JSON array in Conway era" $ \ctx ->
         runResourceT $ do
@@ -1583,7 +1625,10 @@ spec = describe "VOTING_TRANSACTIONS" $ do
             getSrcWallet ctx wal
                 >>= flip
                     verify
-                    [expectField #delegation (`shouldBe` notDelegating [])]
+                    [ expectField
+                        #delegation
+                        (`shouldHaveDelegationHistory` notDelegating [])
+                    ]
 
     voteAndRevote ctx wal depositAmt = do
         -- First voting
@@ -1688,7 +1733,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
             getSrcWallet ctx wal
                 >>= flip
                     verify
-                    [ expectField #delegation (`shouldBe` onlyVoting voting1 [])
+                    [ expectField
+                        #delegation
+                        (`shouldHaveDelegationHistory` onlyVoting voting1 [])
                     ]
 
         let voteAbstain =
@@ -1782,7 +1829,9 @@ spec = describe "VOTING_TRANSACTIONS" $ do
             getSrcWallet ctx wal
                 >>= flip
                     verify
-                    [ expectField #delegation (`shouldBe` onlyVoting voting2 [])
+                    [ expectField
+                        #delegation
+                        (`shouldHaveDelegationHistory` onlyVoting voting2 [])
                     ]
 
         return voting2

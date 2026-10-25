@@ -20,17 +20,22 @@ import Cardano.Wallet.Address.Derivation
 import Cardano.Wallet.Api.Types
     ( ApiAnyCertificate (..)
     , ApiCertificate (..)
+    , ApiCoinSelection
     , ApiConstructTransaction (..)
     , ApiDRepCredential (..)
     , ApiDRepInfo (..)
     , ApiDRepSpecifier (..)
     , ApiDecodedTransaction
+    , ApiFee
     , ApiPoolSpecifier (..)
     , ApiSerialisedTransaction (..)
     , ApiT (..)
     , ApiTransaction
     , ApiTxId (..)
     , ApiWallet (..)
+    , ApiWalletDelegation
+    , ApiWalletLedgerVote (..)
+    , ApiWalletMigrationPlan
     , DRepStatus (..)
     , WalletStyle (..)
     )
@@ -45,10 +50,19 @@ import Cardano.Wallet.Primitive.NetworkId
     )
 import Cardano.Wallet.Primitive.Types.DRep
     ( DRep (..)
+    , DRepID (..)
+    , DRepKeyHash
     )
 import Cardano.Wallet.Primitive.Types.Tx.TxMeta
     ( Direction (..)
     , TxStatus (..)
+    )
+import Control.Monad
+    ( forM_
+    )
+import Control.Monad.IO.Unlift
+    ( MonadIO (..)
+    , MonadUnliftIO
     )
 import Control.Monad.Trans.Resource
     ( runResourceT
@@ -81,6 +95,7 @@ import Test.Integration.Framework.DSL
     ( Context (..)
     , Headers (..)
     , Payload (..)
+    , RequestException
     , counterexample
     , decodeErrorInfo
     , delegating
@@ -100,6 +115,7 @@ import Test.Integration.Framework.DSL
     , json
     , listAddresses
     , listDReps
+    , listTransactions
     , minUTxOValue
     , noBabbage
     , noConway
@@ -108,7 +124,9 @@ import Test.Integration.Framework.DSL
     , onlyVoting
     , postWallet
     , quitStakePool
+    , quitStakePoolUnsigned
     , request
+    , rewardWallet
     , shouldHaveDelegationHistory
     , signTx
     , submitTxWithWid
@@ -1444,6 +1462,243 @@ spec = describe "VOTING_TRANSACTIONS" $ do
                                     votingAndDelegating (ApiT pool1) (ApiT voting) []
                                 )
                             ]
+    it
+        "VOTING_02a - After its DRep retires, a wallet with rewards is \
+        \refused every self-withdrawal until it delegates its vote again"
+        $ \ctx -> runResourceT $ do
+            noBabbage ctx "voting supported in Conway onwards"
+            drepA <- liftIO $ _registerNewDRep ctx
+            (w, _) <- rewardWallet ctx
+            voteFor ctx w (keyHashDRep drepA)
+
+            -- The retirement removes the vote delegation from the ledger,
+            -- and leaves the wallet's history as it is.
+            liftIO $ _retireDRep ctx drepA
+            waitForLedgerVote ctx w ApiLedgerVoteNotDelegated
+            expectHistoryVoting ctx w (keyHashDRep drepA)
+
+            dest <- emptyWallet ctx
+            addr : _ <- fmap (view #id) <$> listAddresses @n ctx dest
+            let payments =
+                    [json|[{
+                        "address": #{addr},
+                        "amount": {
+                            "quantity": #{minUTxOValue (_mainEra ctx)},
+                            "unit": "lovelace"
+                        }
+                    }]|]
+                selfWithdrawal =
+                    Json
+                        [json|{
+                    "payments": #{payments},
+                    "withdrawal": "self"
+                }|]
+                selfWithdrawalSigned =
+                    Json
+                        [json|{
+                    "payments": #{payments},
+                    "passphrase": #{fixturePassphrase},
+                    "withdrawal": "self"
+                }|]
+            available <-
+                view (#balance . #available) . getResponse
+                    <$> getSrcWallet ctx w
+
+            -- The wallet decides from the vote delegation that it read from
+            -- the ledger at the last node tip, so the refusals start once a
+            -- read includes the retirement.
+            eventually "payment-fees refuses the self-withdrawal" $ do
+                r <-
+                    request @ApiFee
+                        ctx
+                        (Link.getTransactionFeeOld @'Shelley w)
+                        Default
+                        selfWithdrawal
+                verify r [expectResponseCode HTTP.status403]
+                decodeErrorInfo r `shouldBe` WithdrawalNotPossibleWithoutVote
+            expectNothingSubmitted ctx w available
+
+            request @(ApiCoinSelection n)
+                ctx
+                (Link.selectCoins @'Shelley w)
+                Default
+                selfWithdrawal
+                >>= expectRefusedWithoutVote ctx w available
+
+            quitStakePoolUnsigned @n @'Shelley ctx w
+                >>= expectRefusedWithoutVote ctx w available
+
+            request @(ApiConstructTransaction n)
+                ctx
+                (Link.createUnsignedTransaction @'Shelley w)
+                Default
+                selfWithdrawal
+                >>= expectRefusedWithoutVote ctx w available
+
+            request @(ApiTransaction n)
+                ctx
+                (Link.createTransactionOld @'Shelley w)
+                Default
+                selfWithdrawalSigned
+                >>= expectRefusedWithoutVote ctx w available
+
+            quitStakePool @n ctx (w, fixturePassphrase)
+                >>= expectRefusedWithoutVote ctx w available
+
+            request @(ApiWalletMigrationPlan n)
+                ctx
+                (Link.createMigrationPlan @'Shelley w)
+                Default
+                (Json [json|{ "addresses": [#{addr}] }|])
+                >>= expectRefusedWithoutVote ctx w available
+
+            request @[ApiTransaction n]
+                ctx
+                (Link.migrateWallet @'Shelley w)
+                Default
+                ( Json
+                    [json|{
+                        "passphrase": #{fixturePassphrase},
+                        "addresses": [#{addr}]
+                    }|]
+                )
+                >>= expectRefusedWithoutVote ctx w available
+
+            -- A vote delegation to a registered DRep makes the rewards
+            -- withdrawable again.
+            drepB <- liftIO $ _registerNewDRep ctx
+            voteFor ctx w (keyHashDRep drepB)
+            eventually "payment-fees accepts the self-withdrawal" $ do
+                r <-
+                    request @ApiFee
+                        ctx
+                        (Link.getTransactionFeeOld @'Shelley w)
+                        Default
+                        selfWithdrawal
+                verify r [expectResponseCode HTTP.status202]
+            rTx <-
+                request @(ApiTransaction n)
+                    ctx
+                    (Link.createTransactionOld @'Shelley w)
+                    Default
+                    selfWithdrawalSigned
+            verify
+                rTx
+                [ expectResponseCode HTTP.status202
+                , expectField #withdrawals (`shouldSatisfy` (not . null))
+                ]
+            eventually "the self-withdrawal is in the ledger" $ do
+                request @(ApiTransaction n)
+                    ctx
+                    (Link.getTransaction @'Shelley w (getResponse rTx))
+                    Default
+                    Empty
+                    >>= flip
+                        verify
+                        [expectField (#status . #getApiT) (`shouldBe` InLedger)]
+
+    it "VOTING_02b - A retired DRep is refused as a vote target" $ \ctx ->
+        runResourceT $ do
+            noBabbage ctx "voting supported in Conway onwards"
+            drepA <- liftIO $ _registerNewDRep ctx
+            (w, _) <- rewardWallet ctx
+            voteFor ctx w (keyHashDRep drepA)
+
+            liftIO $ _retireDRep ctx drepA
+            waitForLedgerVote ctx w ApiLedgerVoteNotDelegated
+            available <-
+                view (#balance . #available) . getResponse
+                    <$> getSrcWallet ctx w
+
+            rJoin <-
+                joinDRep @n
+                    ctx
+                    (SpecificDRep (keyHashDRep drepA))
+                    (w, fixturePassphrase)
+            verify rJoin [expectResponseCode HTTP.status404]
+            decodeErrorInfo rJoin `shouldBe` NotFound
+            expectNothingSubmitted ctx w available
+
+            rConstruct <-
+                request @(ApiConstructTransaction n)
+                    ctx
+                    (Link.createUnsignedTransaction @'Shelley w)
+                    Default
+                    (Json [json|{ "vote": #{ApiT (keyHashDRep drepA)} }|])
+            verify rConstruct [expectResponseCode HTTP.status404]
+            decodeErrorInfo rConstruct `shouldBe` NotFound
+            expectNothingSubmitted ctx w available
+
+            -- A registered DRep and the pre-defined voting options remain
+            -- valid targets.
+            drepB <- liftIO $ _registerNewDRep ctx
+            forM_ [keyHashDRep drepB, Abstain, NoConfidence] $ \drep ->
+                request @(ApiConstructTransaction n)
+                    ctx
+                    (Link.createUnsignedTransaction @'Shelley w)
+                    Default
+                    (Json [json|{ "vote": #{ApiT drep} }|])
+                    >>= flip verify [expectResponseCode HTTP.status202]
+            voteFor ctx w Abstain
+
+    it
+        "VOTING_02c - A retired DRep that registers again is accepted as \
+        \a vote target, and its delegators still cannot withdraw"
+        $ \ctx -> runResourceT $ do
+            noBabbage ctx "voting supported in Conway onwards"
+            drepA <- liftIO $ _registerNewDRep ctx
+            (w, _) <- rewardWallet ctx
+            voteFor ctx w (keyHashDRep drepA)
+
+            liftIO $ _retireDRep ctx drepA
+            liftIO $ _registerDRep ctx drepA
+            waitForLedgerVote ctx w ApiLedgerVoteNotDelegated
+            expectHistoryVoting ctx w (keyHashDRep drepA)
+
+            -- The registration does not restore the vote delegation that
+            -- the retirement removed, and the wallet's history still names
+            -- the DRep, which is live again. The wallet decides from the
+            -- ledger, so it refuses the self-withdrawal, which the ledger
+            -- would refuse, once it has read a node tip that includes the
+            -- retirement. The wallet holds rewards, so only the missing
+            -- vote delegation can be the reason.
+            dest <- emptyWallet ctx
+            addr : _ <- fmap (view #id) <$> listAddresses @n ctx dest
+            available <-
+                view (#balance . #available) . getResponse
+                    <$> getSrcWallet ctx w
+            eventually "payment-fees refuses the self-withdrawal" $ do
+                r <-
+                    request @ApiFee
+                        ctx
+                        (Link.getTransactionFeeOld @'Shelley w)
+                        Default
+                        ( Json
+                            [json|{
+                                "payments": [{
+                                    "address": #{addr},
+                                    "amount": {
+                                        "quantity": #{minUTxOValue (_mainEra ctx)},
+                                        "unit": "lovelace"
+                                    }
+                                }],
+                                "withdrawal": "self"
+                            }|]
+                        )
+                verify r [expectResponseCode HTTP.status403]
+                decodeErrorInfo r `shouldBe` WithdrawalNotPossibleWithoutVote
+            expectNothingSubmitted ctx w available
+
+            -- For the same reason a vote to the DRep is not a repeated vote.
+            eventually "transactions-construct accepts the vote" $ do
+                request @(ApiConstructTransaction n)
+                    ctx
+                    (Link.createUnsignedTransaction @'Shelley w)
+                    Default
+                    (Json [json|{ "vote": #{ApiT (keyHashDRep drepA)} }|])
+                    >>= flip verify [expectResponseCode HTTP.status202]
+            voteFor ctx w (keyHashDRep drepA)
+
     it "DREPS_01 - listDReps returns 200 with a JSON array in Conway era" $ \ctx ->
         runResourceT $ do
             noBabbage ctx "DRep listing requires Conway era"
@@ -1552,6 +1807,78 @@ spec = describe "VOTING_TRANSACTIONS" $ do
     getSrcWallet ctx wal =
         let endpoint = Link.getWallet @'Shelley wal
         in  request @ApiWallet ctx endpoint Default Empty
+
+    keyHashDRep :: DRepKeyHash -> DRep
+    keyHashDRep = FromDRepID . DRepFromKeyHash
+
+    -- The DRep of the latest status in the wallet's delegation history.
+    historyVoting :: ApiWalletDelegation -> Maybe (ApiT DRep)
+    historyVoting history = case reverse (history ^. #next) of
+        latest : _ -> latest ^. #voting
+        [] -> history ^. #active . #voting
+
+    expectHistoryVoting ctx wal drep =
+        getSrcWallet ctx wal
+            >>= flip
+                verify
+                [ expectField
+                    #delegation
+                    ((`shouldBe` Just (ApiT drep)) . historyVoting)
+                ]
+
+    -- Delegate the wallet's vote and wait until the delegation is in the
+    -- ledger and in the wallet's history.
+    voteFor ctx wal drep = do
+        r <- joinDRep @n ctx (SpecificDRep drep) (wal, fixturePassphrase)
+        verify r [expectResponseCode HTTP.status202]
+        eventually "the vote delegation is in the ledger" $ do
+            request @(ApiTransaction n)
+                ctx
+                (Link.getTransaction @'Shelley wal (getResponse r))
+                Default
+                Empty
+                >>= flip
+                    verify
+                    [expectField (#status . #getApiT) (`shouldBe` InLedger)]
+        eventually "the wallet's history names the DRep"
+            $ expectHistoryVoting ctx wal drep
+        waitForLedgerVote ctx wal (ApiLedgerVoteDelegated (ApiT drep))
+
+    -- Wait until the wallet reports the given vote delegation from the
+    -- ledger. The wallet reads it when the node tip changes, and decides
+    -- from its last read.
+    waitForLedgerVote ctx wal expected =
+        eventually "the wallet reports the vote delegation of the ledger"
+            $ getSrcWallet ctx wal
+                >>= flip
+                    verify
+                    [ expectField
+                        (#delegation . #ledgerVote)
+                        (`shouldBe` Just expected)
+                    ]
+
+    expectNothingSubmitted
+        :: MonadUnliftIO m => Context -> ApiWallet -> ApiAmount -> m ()
+    expectNothingSubmitted ctx wal available = do
+        getSrcWallet ctx wal
+            >>= flip
+                verify
+                [expectField (#balance . #available) (`shouldBe` available)]
+        txs <- listTransactions @n ctx wal Nothing Nothing Nothing Nothing
+        [tx ^. #id | tx <- txs, tx ^. #status . #getApiT == Pending]
+            `shouldBe` []
+
+    expectRefusedWithoutVote
+        :: (MonadUnliftIO m, Show a)
+        => Context
+        -> ApiWallet
+        -> ApiAmount
+        -> (HTTP.Status, Either RequestException a)
+        -> m ()
+    expectRefusedWithoutVote ctx wal available r = do
+        verify r [expectResponseCode HTTP.status403]
+        decodeErrorInfo r `shouldBe` WithdrawalNotPossibleWithoutVote
+        expectNothingSubmitted ctx wal available
 
     quit ctx wal depositAmt = do
         -- quitting, ie. deregistrating the stake key

@@ -236,6 +236,7 @@ import Cardano.Wallet.Address.Derivation
     , RewardAccount (..)
     , Role
     , SoftDerivation (..)
+    , ToRewardAccount (..)
     , delegationAddressS
     , deriveRewardAccount
     , stakeDerivationPath
@@ -433,6 +434,7 @@ import Cardano.Wallet.Api.Types
     , ApiWalletDelegationNext (..)
     , ApiWalletDelegationStatus (..)
     , ApiWalletInput (..)
+    , ApiWalletLedgerVote (..)
     , ApiWalletMigrationBalance (..)
     , ApiWalletMigrationPlan (..)
     , ApiWalletMigrationPlanPostData (..)
@@ -537,6 +539,7 @@ import Cardano.Wallet.Network
     ( ErrFetchBlock (..)
     , NetworkLayer
     , fetchRewardAccountBalances
+    , getCachedVoteDelegation
     , timeInterpreter
     )
 import Cardano.Wallet.Network.RestorationMode
@@ -627,6 +630,7 @@ import Cardano.Wallet.Primitive.Types.DRep
     , DRepRegistration (..)
     , DRepScriptHash (..)
     , DRepSummary (..)
+    , VoteDelegation (..)
     , encodeDRepIDBech32
     )
 import Cardano.Wallet.Primitive.Types.Hash
@@ -1143,6 +1147,7 @@ mkShelleyWallet
        , IsOurs s Address
        , IsOurs s RewardAccount
        , HasWorkerRegistry s ctx
+       , ToRewardAccount k
        )
     => MkApiWallet ctx s ApiWallet
 mkShelleyWallet ctx@ApiLayer{..} wid cp meta delegation pending progress = do
@@ -1163,10 +1168,17 @@ mkShelleyWallet ctx@ApiLayer{..} wid cp meta delegation pending progress = do
     --
     -- But ultimately, we might want to make the uncertainty transparent to API
     -- users. TODO: ADP-575
+    ledgerVote <-
+        liftIO
+            $ getCachedVoteDelegation netLayer
+            $ toRewardAccount
+            $ Seq.rewardAccountKey
+            $ getState cp
     apiDelegation <-
         liftIO
             $ toApiWalletDelegation
                 delegation
+                ledgerVote
                 (unsafeExtendSafeZone ti)
 
     tip <-
@@ -1205,8 +1217,12 @@ toApiPassphraseInfo WalletPassphraseInfo{lastUpdatedAt, passphraseScheme} =
     ApiWalletPassphraseInfo lastUpdatedAt (ApiT passphraseScheme)
 
 toApiWalletDelegation
-    :: W.WalletDelegation -> TimeInterpreter IO -> IO ApiWalletDelegation
-toApiWalletDelegation W.WalletDelegation{active, next} ti = do
+    :: W.WalletDelegation
+    -> Maybe VoteDelegation
+    -- ^ The vote delegation that the ledger holds for the reward account
+    -> TimeInterpreter IO
+    -> IO ApiWalletDelegation
+toApiWalletDelegation W.WalletDelegation{active, next} ledger ti = do
     apiNext <- forM next $ \W.WalletDelegationNext{status, changesAt} -> do
         info <- interpretQuery ti $ toEpochInfo changesAt
         return $ toApiWalletDelegationNext (Just info) status
@@ -1215,8 +1231,13 @@ toApiWalletDelegation W.WalletDelegation{active, next} ti = do
         $ ApiWalletDelegation
             { active = toApiWalletDelegationNext Nothing active
             , next = apiNext
+            , ledgerVote = toApiWalletLedgerVote <$> ledger
             }
   where
+    toApiWalletLedgerVote = \case
+        VoteDelegatedTo drep -> ApiLedgerVoteDelegated (ApiT drep)
+        VoteNotDelegated -> ApiLedgerVoteNotDelegated
+
     toApiWalletDelegationNext mepochInfo = \case
         W.Delegating pid ->
             ApiWalletDelegationNext
@@ -1517,10 +1538,19 @@ mkSharedWallet ctx wid cp meta delegation pending progress =
                 liftIO $ W.fetchRewardBalance @s $ wrk ^. dbLayer
 
             let ti = timeInterpreter $ ctx ^. networkLayer
+            -- A shared wallet without a delegation template has no reward
+            -- account.
+            ledgerVote <-
+                liftIO
+                    $ maybe
+                        (pure Nothing)
+                        (getCachedVoteDelegation $ ctx ^. networkLayer)
+                    $ Shared.rewardAccountKey st
             apiDelegation <-
                 liftIO
                     $ toApiWalletDelegation
                         delegation
+                        ledgerVote
                         (unsafeExtendSafeZone ti)
 
             tip' <-
@@ -4835,10 +4865,12 @@ listStakeKeys lookupStakeRef ctx@ApiLayer{..} (ApiT wid) =
         let utxo = availableUTxO @s pending wal
         let takeFst (a, _, _) = a
         ourAccount <- takeFst <$> liftIO (W.readRewardAccount @s db)
+        ledgerVote <- liftIO $ getCachedVoteDelegation netLayer ourAccount
         ourApiDelegation <-
             liftIO
                 $ toApiWalletDelegation
                     delegation
+                    ledgerVote
                     (unsafeExtendSafeZone (timeInterpreter $ ctx ^. networkLayer))
         let ourKeys = [(ourAccount, 0, ourApiDelegation)]
         liftIO

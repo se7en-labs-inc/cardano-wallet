@@ -4114,6 +4114,7 @@ notDelegating nexts =
                 ApiWalletDelegationNext NotDelegating Nothing Nothing (Just epochInfo)
             Just pid ->
                 ApiWalletDelegationNext Delegating (Just pid) Nothing (Just epochInfo)
+        , ledgerVote = Nothing
         }
 
 delegating

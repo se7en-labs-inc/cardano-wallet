@@ -24,7 +24,9 @@ import Cardano.Wallet.Network.LocalStateQuery.PParams
     , slottingParamsLegacy
     )
 import Cardano.Wallet.Network.LocalStateQuery.RewardAccount
-    ( fetchRewardAccounts
+    ( RewardAccountState (..)
+    , fetchRewardAccountStates
+    , fetchRewardAccounts
     , getStakeDelegDeposits
     )
 import Cardano.Wallet.Network.LocalStateQuery.StakeDistribution

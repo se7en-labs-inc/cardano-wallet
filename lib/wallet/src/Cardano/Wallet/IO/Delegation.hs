@@ -108,6 +108,9 @@ import Control.Exception
 import Control.Monad
     ( forM
     )
+import Control.Monad.Trans.Except
+    ( runExceptT
+    )
 import Control.Tracer
     ( traceWith
     )
@@ -131,6 +134,7 @@ import Data.Time.Clock
     )
 import Prelude
 
+import qualified Cardano.Balance.Tx.Eras as Write
 import qualified Cardano.Balance.Tx.Tx as Write
 import qualified Cardano.Wallet as W
 import qualified Cardano.Wallet.Address.Discovery.Sequential as Seq
@@ -317,6 +321,7 @@ selectCoinsForQuit ctx = do
 
     action <-
         quitStakePoolDelegationAction ctx currentEpochSlotting withdrawal
+    assertWithdrawalPermitted netLayer db era pp withdrawal
 
     let changeAddrGen = W.defaultChangeAddressGen (delegationAddressS @n)
 
@@ -499,6 +504,18 @@ quitStakePoolDelegationAction ctx currentEpochSlotting withdrawal = do
   where
     db = ctx ^. dbLayer
 
+-- | Refuse a self-withdrawal that the ledger would refuse.
+assertWithdrawalPermitted
+    :: NetworkLayer IO block
+    -> DBLayer IO s
+    -> Write.RecentEra era
+    -> Write.PParams era
+    -> Withdrawal
+    -> IO ()
+assertWithdrawalPermitted netLayer db era pp withdrawal =
+    runExceptT (W.assertIsVoting netLayer db era pp withdrawal)
+        >>= either (throwIO . ExceptionConstructTx) pure
+
 -- | Send a transaction to the network where we quit staking.
 quitStakePool
     :: forall s n k
@@ -520,9 +537,12 @@ quitStakePool ctx walletId passphrase = do
 
     currentEpochSlotting <- W.getCurrentEpochSlotting netLayer
     pp <- currentProtocolParameters netLayer
+    (Write.PParamsInAnyRecentEra era ledgerPP, _) <-
+        W.readNodeTipStateForTxWrite netLayer
 
     action <-
         quitStakePoolDelegationAction ctx currentEpochSlotting withdrawal
+    assertWithdrawalPermitted netLayer db era ledgerPP withdrawal
 
     ttl <- W.transactionExpirySlot ti Nothing
     let transactionCtx =

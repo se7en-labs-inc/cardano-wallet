@@ -720,7 +720,6 @@ import Cardano.Wallet.Transaction
     , Withdrawal (..)
     , WitnessCount (..)
     , WitnessCountCtx (..)
-    , containsSelfWithdrawal
     , defaultTransactionCtx
     )
 import Cardano.Wallet.Unsafe
@@ -2260,6 +2259,7 @@ selectCoins ctx@ApiLayer{..} argGenChange (ApiT walletId) body = do
                         (txWitnessTagForKey $ keyOfWallet $ walletFlavor @s)
                         db
                     )
+        liftHandler $ W.assertIsVoting netLayer db era pp withdrawal
         let genChange = W.defaultChangeAddressGen argGenChange
         let paymentOuts = NE.toList $ addressAmountToTxOut <$> body ^. #payments
         let txCtx =
@@ -2652,7 +2652,7 @@ postTransactionOld ctx@ApiLayer{..} argGenChange (ApiT wid) body = do
     let outs = addressAmountToTxOut <$> body ^. #payments
     let md = body ^? #metadata . traverse . #txMetadataWithSchema_metadata
     let mTTL = body ^? #timeToLive . traverse . #getQuantity
-    (Write.PParamsInAnyRecentEra era _, _) <-
+    (Write.PParamsInAnyRecentEra era ledgerPP, _) <-
         liftIO $ W.readNodeTipStateForTxWrite netLayer
     withWorkerCtx ctx wid liftE liftE $ \wrk -> do
         let db = wrk ^. dbLayer
@@ -2665,9 +2665,7 @@ postTransactionOld ctx@ApiLayer{..} argGenChange (ApiT wid) body = do
                     (txWitnessTagForKey $ keyOfWallet $ walletFlavor @s)
                     db
                     apiWdrl
-        when (containsSelfWithdrawal wdrl)
-            $ liftHandler
-            $ W.assertIsVoting db era
+        liftHandler $ W.assertIsVoting netLayer db era ledgerPP wdrl
         let txCtx =
                 defaultTransactionCtx
                     { txWithdrawal = wdrl
@@ -2861,7 +2859,7 @@ postTransactionFeeOld
     -> PostTransactionFeeOldData n
     -> Handler ApiFee
 postTransactionFeeOld ctx@ApiLayer{..} (ApiT walletId) body = do
-    (Write.PParamsInAnyRecentEra _era pp, timeTranslation) <-
+    (Write.PParamsInAnyRecentEra era pp, timeTranslation) <-
         liftIO $ W.readNodeTipStateForTxWrite netLayer
 
     let mTTL = body ^? #timeToLive . traverse . #getQuantity
@@ -2877,6 +2875,7 @@ postTransactionFeeOld ctx@ApiLayer{..} (ApiT walletId) body = do
                     (txWitnessTagForKey $ keyOfWallet $ walletFlavor @s)
                     db
                     apiWdrl
+        liftHandler $ W.assertIsVoting netLayer db era pp wdrl
         let outputs = F.toList $ addressAmountToTxOut <$> body ^. #payments
             minCoins =
                 W.calcMinimumCoinValues pp txLayer
@@ -3171,7 +3170,9 @@ constructTransaction api knownPools poolStatus apiWalletId body = do
         unbalancedTx <-
             liftHandler
                 $ W.constructTransaction @n
+                    netLayer
                     era
+                    pp
                     db
                     transactionCtx3
                     PreSelection{outputs = outs <> mintingOuts}
@@ -3662,7 +3663,9 @@ constructSharedTransaction
                     unbalancedTx <-
                         liftHandler
                             $ W.constructUnbalancedSharedTransaction @n
+                                netLayer
                                 era
+                                pp
                                 db
                                 txCtx
                                 PreSelection{outputs = outs}
@@ -4910,6 +4913,7 @@ createMigrationPlan ctx@ApiLayer{..} withdrawalType (ApiT wid) postData =
                     (txWitnessTagForKey $ keyOfWallet $ walletFlavor @s)
                     db
                     pd
+        assertSelfWithdrawalVoting netLayer db rewardWithdrawal
         (wallet, _, _) <- handler $ W.readWallet wrk
         plan <- handler $ W.createMigrationPlan @_ wrk rewardWithdrawal
         liftHandler
@@ -4919,6 +4923,18 @@ createMigrationPlan ctx@ApiLayer{..} withdrawalType (ApiT wid) postData =
                 (view #addresses postData)
                 rewardWithdrawal
                 plan
+
+-- | Refuse a self-withdrawal that the ledger would refuse, with the protocol
+-- parameters of the node's tip.
+assertSelfWithdrawalVoting
+    :: NetworkLayer IO block
+    -> DBLayer IO s
+    -> Withdrawal
+    -> Handler ()
+assertSelfWithdrawalVoting netLayer db withdrawal = do
+    (Write.PParamsInAnyRecentEra era pp, _) <-
+        liftIO $ W.readNodeTipStateForTxWrite netLayer
+    liftHandler $ W.assertIsVoting netLayer db era pp withdrawal
 
 mkApiWalletMigrationPlan
     :: forall n s
@@ -5027,6 +5043,7 @@ migrateWallet ctx@ApiLayer{..} withdrawalType (ApiT wid) postData = do
                     (txWitnessTagForKey $ keyOfWallet $ walletFlavor @s)
                     db
                     pd
+        assertSelfWithdrawalVoting netLayer db rewardWithdrawal
         plan <- handler $ W.createMigrationPlan @_ wrk rewardWithdrawal
         ttl <- liftIO $ W.transactionExpirySlot ti Nothing
         pp <- liftIO $ NW.currentProtocolParameters netLayer

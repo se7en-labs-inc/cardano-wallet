@@ -120,6 +120,7 @@ module Cardano.Wallet
     , setChangeAddressMode
     , setChangeAddressModeShared
     , assertIsVoting
+    , withdrawalPermitted
     , quitWithdrawal
     , assertDifferentVoting
 
@@ -319,8 +320,12 @@ import Cardano.Ledger.Binary
     ( serialize'
     , shelleyProtVer
     )
+import Cardano.Ledger.Conway
+    ( hardforkConwayBootstrapPhase
+    )
 import Cardano.Ledger.Core
     ( certsTxBodyL
+    , ppProtocolVersionL
     )
 import Cardano.Mnemonic
     ( SomeMnemonic
@@ -596,6 +601,7 @@ import Cardano.Wallet.Primitive.Types.Credentials
     )
 import Cardano.Wallet.Primitive.Types.DRep
     ( DRep (..)
+    , VoteDelegation (..)
     )
 import Cardano.Wallet.Primitive.Types.Hash
     ( Hash (..)
@@ -3440,19 +3446,20 @@ buildAndSignTransaction ctx wid mkRwdAcct pwd txCtx sel =
 
 -- | Construct an unsigned transaction from a given selection.
 constructTransaction
-    :: forall n era
+    :: forall n era block
      . ( HasSNetworkId n
        , Write.IsRecentEra era
        )
-    => Write.RecentEra era
+    => NetworkLayer IO block
+    -> Write.RecentEra era
+    -> Write.PParams era
     -> DBLayer IO (SeqState n ShelleyKey)
     -> TransactionCtx
     -> PreSelection
     -> ExceptT ErrConstructTx IO (Write.Tx era)
-constructTransaction era db txCtx preSel = do
+constructTransaction nl era pp db txCtx preSel = do
     (_, mRewardXPub, _) <- lift $ readRewardAccount db
-    when (containsSelfWithdrawal (txCtx ^. #txWithdrawal))
-        $ assertIsVoting db era
+    assertIsVoting nl db era pp (txCtx ^. #txWithdrawal)
     mkUnsignedTransaction
         netId
         (Left $ fromJust mRewardXPub)
@@ -3463,24 +3470,25 @@ constructTransaction era db txCtx preSel = do
     netId = networkIdVal $ sNetworkId @n
 
 constructUnbalancedSharedTransaction
-    :: forall n era
+    :: forall n era block
      . ( HasSNetworkId n
        , Write.IsRecentEra era
        )
-    => Write.RecentEra era
+    => NetworkLayer IO block
+    -> Write.RecentEra era
+    -> Write.PParams era
     -> DBLayer IO (SharedState n SharedKey)
     -> TransactionCtx
     -> PreSelection
     -> ExceptT ErrConstructTx IO (Write.Tx era)
-constructUnbalancedSharedTransaction era db txCtx sel =
+constructUnbalancedSharedTransaction nl era pp db txCtx sel =
     db & \DBLayer{..} -> do
         cp <- lift $ atomically readCheckpoint
         let s = getState cp
             scriptM =
                 flip (replaceCosignersWithVerKeys CAShelley.Stake) minBound
                     <$> delegationTemplate s
-        when (containsSelfWithdrawal (txCtx ^. #txWithdrawal))
-            $ assertIsVoting db era
+        assertIsVoting nl db era pp (txCtx ^. #txWithdrawal)
         mapExceptT atomically $ do
             withExceptT ErrConstructTxBody
                 $ ExceptT
@@ -3594,15 +3602,70 @@ votingEnabledInEra = \case
     Write.RecentEraConway -> Right ()
     _ -> Left $ ErrConstructTxVoting ErrWrongEra
 
+-- | Decide whether the ledger accepts a withdrawal from a reward account.
+--
+-- From protocol version 10 the ledger refuses a withdrawal from a key-hash
+-- reward account that holds no vote delegation, whatever the amount, and it
+-- accepts any withdrawal from a script-hash reward account. The decision is,
+-- in this order:
+--
+-- 1. permitted in the Conway bootstrap phase;
+-- 2. permitted for a script-hash reward account;
+-- 3. when the ledger value is known, permitted exactly when it holds a vote
+--    delegation, whatever the wallet's history says;
+-- 4. when the ledger value is unknown, permitted exactly when the wallet's
+--    history records a vote.
+withdrawalPermitted
+    :: Bool
+    -- ^ Whether the protocol version is in the Conway bootstrap phase.
+    -> RewardAccount
+    -> Maybe VoteDelegation
+    -- ^ The vote delegation that the ledger holds, if it has been read.
+    -> Maybe DRep
+    -- ^ The DRep of the latest vote in the wallet's delegation history.
+    -> Bool
+withdrawalPermitted bootstrap rewardAccount ledgerVote history
+    | bootstrap = True
+    | FromScriptHash _ <- rewardAccount = True
+    | Just v <- ledgerVote = v /= VoteNotDelegated
+    | otherwise = isJust history
+
+-- | Refuse a self-withdrawal that the ledger would refuse, before anything is
+-- built for it. Acts only in Conway, and only on 'WithdrawalSelf'; see
+-- 'withdrawalPermitted' for the decision.
 assertIsVoting
-    :: DBLayer IO s
+    :: NetworkLayer IO block
+    -> DBLayer IO s
     -> Write.RecentEra era
+    -> Write.PParams era
+    -> Withdrawal
     -> ExceptT ErrConstructTx IO ()
-assertIsVoting DBLayer{..} = \case
-    Write.RecentEraConway -> do
-        voted <- liftIO $ atomically (getCurrentVoting walletState)
-        unless (isJust voted) $ throwE ErrConstructTxWithdrawalWithoutVoting
+assertIsVoting nl DBLayer{..} era pp = \case
+    WithdrawalSelf rewardAccount _ _ -> case era of
+        Write.RecentEraConway -> do
+            let bootstrap =
+                    hardforkConwayBootstrapPhase (pp ^. ppProtocolVersionL)
+                exempt = bootstrap || isScriptHash rewardAccount
+            permitted <-
+                if exempt
+                    then pure True
+                    else liftIO $ do
+                        ledgerVote <-
+                            getCachedVoteDelegation nl rewardAccount
+                        history <- atomically (getCurrentVoting walletState)
+                        pure
+                            $ withdrawalPermitted
+                                bootstrap
+                                rewardAccount
+                                ledgerVote
+                                history
+            unless permitted $ throwE ErrConstructTxWithdrawalWithoutVoting
+        _ -> pure ()
     _ -> pure ()
+  where
+    isScriptHash = \case
+        FromScriptHash _ -> True
+        FromKeyHash _ -> False
 
 assertDifferentVoting
     :: DBLayer IO s

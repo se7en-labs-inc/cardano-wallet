@@ -46,11 +46,19 @@ import Cardano.Crypto.WalletHD.Encrypted
     , encryptedPublic
     , publicKeyByteString
     )
+import Cardano.Ledger.BaseTypes
+    ( ProtVer (..)
+    , natVersion
+    )
+import Cardano.Ledger.Core
+    ( ppProtocolVersionL
+    )
 import Cardano.Mnemonic
     ( SomeMnemonic (..)
     )
 import Cardano.Wallet
-    ( ErrUpdatePassphrase (..)
+    ( ErrConstructTx (..)
+    , ErrUpdatePassphrase (..)
     , ErrWithRootKey (..)
     , InitialState (..)
     , LocalTxSubmissionConfig (..)
@@ -129,6 +137,7 @@ import Cardano.Wallet.DB.Store.Submissions.Operations
     )
 import Cardano.Wallet.DummyTarget.Primitive.Types
     ( block0
+    , dummyLedgerProtocolParameters
     , dummyNetworkLayer
     , dummyNetworkParameters
     , dummySlottingParameters
@@ -182,6 +191,9 @@ import Cardano.Wallet.Primitive.Types.Address.Gen
 import Cardano.Wallet.Primitive.Types.AssetId.Gen
     ( genAssetIdLargeRange
     )
+import Cardano.Wallet.Primitive.Types.Certificates
+    ( DelegationCertificate (..)
+    )
 import Cardano.Wallet.Primitive.Types.Coin
     ( Coin (..)
     )
@@ -190,6 +202,12 @@ import Cardano.Wallet.Primitive.Types.Coin.Gen
     )
 import Cardano.Wallet.Primitive.Types.Credentials
     ( HashedCredentials (..)
+    )
+import Cardano.Wallet.Primitive.Types.DRep
+    ( DRep (..)
+    , DRepID (..)
+    , DRepKeyHash (..)
+    , VoteDelegation (..)
     )
 import Cardano.Wallet.Primitive.Types.Hash
     ( Hash (..)
@@ -329,6 +347,7 @@ import Data.Functor.Identity
     )
 import Data.Generics.Internal.VL
     ( iso
+    , set
     , view
     , (^.)
     )
@@ -449,7 +468,11 @@ import Prelude
 
 import qualified Cardano.Balance.Tx.Eras as Write
     ( AnyRecentEra (AnyRecentEra)
+    , Conway
     , RecentEra (RecentEraConway, RecentEraDijkstra)
+    )
+import qualified Cardano.Balance.Tx.Tx as Write
+    ( PParams
     )
 import qualified Cardano.Crypto.Wallet as CC
 import qualified Cardano.Wallet as W
@@ -562,6 +585,53 @@ spec = describe "Cardano.WalletSpec" $ do
         it
             "LocalTxSubmission updates are limited in frequency"
             (property prop_throttle)
+
+    describe "assertIsVoting" $ do
+        let keyAccount = FromKeyHash (BS.replicate 28 1)
+            scriptAccount = FromScriptHash (BS.replicate 28 2)
+            drep =
+                FromDRepID (DRepFromKeyHash (DRepKeyHash (BS.replicate 28 3)))
+            refused = Left ErrConstructTxWithdrawalWithoutVoting
+            afterBootstrap = assertIsVotingWith False
+            inBootstrap = assertIsVotingWith True
+
+        it "refuses a retired DRep: the history holds a vote, the ledger none"
+            $ afterBootstrap keyAccount (Just VoteNotDelegated) (Just drep)
+                >>= (`shouldBe` refused)
+
+        it "permits a vote delegation made outside the wallet"
+            $ afterBootstrap keyAccount (Just (VoteDelegatedTo drep)) Nothing
+                >>= (`shouldBe` Right ())
+
+        it "refuses a key-hash account whose ledger value is not delegated"
+            $ afterBootstrap keyAccount (Just VoteNotDelegated) Nothing
+                >>= (`shouldBe` refused)
+
+        it "decides from the history when the ledger value is unread"
+            $ do
+                afterBootstrap keyAccount Nothing (Just drep)
+                    >>= (`shouldBe` Right ())
+                afterBootstrap keyAccount Nothing Nothing >>= (`shouldBe` refused)
+
+        it "permits a script-hash account without a vote delegation"
+            $ afterBootstrap scriptAccount (Just VoteNotDelegated) Nothing
+                >>= (`shouldBe` Right ())
+
+        it "permits every account in the bootstrap phase"
+            $ inBootstrap keyAccount (Just VoteNotDelegated) Nothing
+                >>= (`shouldBe` Right ())
+
+        it "does not refuse a transaction without a self-withdrawal" $ do
+            WalletLayerFixture db _ _ <- setupFixture dummyStateF testWallet
+            result <-
+                runExceptT
+                    $ W.assertIsVoting
+                        mockNetworkLayer
+                        db
+                        Write.RecentEraConway
+                        (ledgerPParams False)
+                        NoWithdrawal
+            result `shouldBe` Right ()
 
     describe "quitWithdrawal" $ do
         let account = FromKeyHash (BS.replicate 28 1)
@@ -964,6 +1034,48 @@ walletPasswordChangeV1ToV2PreservesPublicKey = do
     pubKeyAfter `shouldBe` pubKeyBefore
 
 -- | A fixed (WalletId, WalletName, DummyState) used by the migration tests.
+-- | Protocol parameters of Conway, in the bootstrap phase (protocol version 9)
+-- or after it (version 10).
+ledgerPParams :: Bool -> Write.PParams Write.Conway
+ledgerPParams bootstrap =
+    set
+        ppProtocolVersionL
+        (ProtVer (if bootstrap then natVersion @9 else natVersion @10) 0)
+        dummyLedgerProtocolParameters
+
+-- | Run 'W.assertIsVoting' on a self-withdrawal from the given reward account,
+-- with a network layer that answers the ledger's vote delegation, and a wallet
+-- whose delegation history holds the given vote.
+assertIsVotingWith
+    :: Bool
+    -- ^ Whether the protocol version is in the bootstrap phase.
+    -> RewardAccount
+    -> Maybe VoteDelegation
+    -- ^ The ledger's vote delegation, or unread.
+    -> Maybe DRep
+    -- ^ The vote in the wallet's history, if any.
+    -> IO (Either ErrConstructTx ())
+assertIsVotingWith bootstrap account ledgerVote history = do
+    WalletLayerFixture db@DBLayer{..} _ _ <-
+        setupFixture dummyStateF testWallet
+    forM_ history $ \drep ->
+        atomically
+            $ W.putDelegationCertificate
+                walletState
+                (CertVoteAndDelegate account Nothing (Just drep))
+                (SlotNo 1)
+    let nl =
+            (mockNetworkLayer :: NetworkLayer IO Read.ConsensusBlock)
+                { getCachedVoteDelegation = const (pure ledgerVote)
+                }
+    runExceptT
+        $ W.assertIsVoting
+            nl
+            db
+            Write.RecentEraConway
+            (ledgerPParams bootstrap)
+            (WithdrawalSelf account (DerivationIndex 0 :| []) (Coin 1_000_000))
+
 testWallet :: (WalletId, WalletName, DummyState)
 testWallet =
     ( WalletId (hash @BS.ByteString "migration-test-wallet")

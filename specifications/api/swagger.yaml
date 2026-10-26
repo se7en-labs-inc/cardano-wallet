@@ -5741,7 +5741,14 @@ x-errSameVote: &errSameVote
   properties:
     message:
       type: string
-      description: May occur in Conway onwards when the same vote was cast.
+      description: |
+        May occur in Conway onwards when the requested vote delegation is the
+        one in force. When the wallet has read the vote delegation that the
+        ledger holds for its reward account (`delegation.ledger_vote`), that
+        is the one in force, whatever the wallet's delegation history says.
+        Until then, the one in force is the vote of the wallet's latest
+        delegation status: the last entry of `delegation.next`, else
+        `delegation.active`.
     code:
       type: string
       enum: ['same_vote']
@@ -6611,8 +6618,6 @@ x-responsesPostTransaction: &responsesPostTransaction
 
 x-responsesConstructTransaction: &responsesConstructTransaction
   <<:
-    - *responsesErr404WalletNotFound
-    - *responsesErr404WalletNotInitialized
     - *responsesErr406
     - *responsesErr415UnsupportedMediaType
   400:
@@ -6622,6 +6627,15 @@ x-responsesConstructTransaction: &responsesConstructTransaction
         schema:
           oneOf:
             - <<: *errBadRequest
+  404:
+    description: Not Found
+    content:
+      application/json:
+        schema:
+          oneOf:
+            - <<: *errNoSuchWallet
+            - <<: *errWalletNotInitialized
+            - <<: *errNotFound
   403:
     description: Forbidden
     content:
@@ -7018,6 +7032,7 @@ x-responsesJoinDRep: &responsesJoinDRep
             - <<: *errNoSuchWallet
             - <<: *errWalletNotInitialized
             - <<: *errNoSuchPool
+            - <<: *errNotFound
   202:
     description: Accepted
     content:

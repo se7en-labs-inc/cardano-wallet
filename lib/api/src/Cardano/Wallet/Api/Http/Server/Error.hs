@@ -155,6 +155,9 @@ import Cardano.Wallet.Primitive.Ledger.Convert
 import Cardano.Wallet.Primitive.Slotting
     ( PastHorizonException
     )
+import Cardano.Wallet.Primitive.Types.DRep
+    ( DRep (..)
+    )
 import Cardano.Wallet.Primitive.Types.MetadataEncryption
     ( ErrMetadataDecryption (..)
     , ErrMetadataEncryption (..)
@@ -988,6 +991,17 @@ instance IsServerError ErrCannotVote where
                 $ mconcat
                     [ "I couldn't cast a vote. "
                     , "Voting is not available before the Conway era."
+                    ]
+        ErrDRepNotRegistered drep ->
+            apiError err404 NotFound
+                $ mconcat
+                    [ "I couldn't delegate the vote to "
+                    , toText (FromDRepID drep)
+                    , ": the ledger holds no registered DRep with this "
+                    , "identifier, and it refuses a vote delegation to an "
+                    , "unregistered DRep. A DRep that has retired is no longer "
+                    , "registered. Delegate the vote to a registered DRep, "
+                    , "to abstain or to no_confidence."
                     ]
 
 instance IsServerError ErrCannotQuit where

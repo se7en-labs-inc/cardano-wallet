@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -85,6 +86,7 @@ import Test.Hspec
     )
 import Test.QuickCheck
     ( Arbitrary (..)
+    , Gen
     , InfiniteList (..)
     , NonEmptyList (..)
     , Property
@@ -93,6 +95,7 @@ import Test.QuickCheck
     , checkCoverage
     , cover
     , elements
+    , forAll
     , label
     , oneof
     , property
@@ -344,6 +347,72 @@ spec = describe "Cardano.Wallet.DelegationSpec" $ do
         it "effectiveDelegationStatus is last next, else active"
             $ property prop_effectiveDelegationStatus
 
+    describe "joinDRepVotingAction with the ledger's vote delegation" $ do
+        it "accepts the history's DRep while the ledger holds another" $ do
+            voteWith (Just (VoteDelegatedTo drepB)) drepA votedA True
+                `shouldBe` Right (Vote drepA)
+
+        it "rejects the DRep that the ledger holds, set outside the wallet" $ do
+            voteWith (Just (VoteDelegatedTo drepB)) drepB votedA True
+                `shouldBe` Left (W.ErrAlreadyVoted drepB)
+            voteWith (Just (VoteDelegatedTo drepB)) drepB notVoted True
+                `shouldBe` Left (W.ErrAlreadyVoted drepB)
+
+        it "ignores a vote delegation that a DRep retirement removed" $ do
+            voteWith (Just VoteNotDelegated) drepA votedA True
+                `shouldBe` Right (Vote drepA)
+
+        it "rejects Abstain and NoConfidence when the ledger holds them" $ do
+            voteWith (Just (VoteDelegatedTo Abstain)) Abstain notVoted True
+                `shouldBe` Left (W.ErrAlreadyVoted Abstain)
+            voteWith
+                (Just (VoteDelegatedTo NoConfidence))
+                NoConfidence
+                votedA
+                True
+                `shouldBe` Left (W.ErrAlreadyVoted NoConfidence)
+
+        it "accepts Abstain and NoConfidence when the ledger holds none" $ do
+            voteWith (Just VoteNotDelegated) Abstain votedAbstain True
+                `shouldBe` Right (Vote Abstain)
+            voteWith (Just VoteNotDelegated) NoConfidence notVoted False
+                `shouldBe` Right (VoteRegisteringKey NoConfidence)
+
+        it "decides from the history while the ledger value is unread" $ do
+            voteWith Nothing drepA votedA True
+                `shouldBe` Left (W.ErrAlreadyVoted drepA)
+            voteWith Nothing drepB votedA True
+                `shouldBe` Right (Vote drepB)
+
+    describe "guardDRepRegistered" $ do
+        let afterBootstrap = WD.guardDRepRegistered False
+
+        it "refuses a retired DRep, which the ledger no longer holds"
+            $ afterBootstrap drepA (Just False)
+            `shouldBe` Left (W.ErrDRepNotRegistered drepIdA)
+
+        it "accepts a DRep that registered again after retiring"
+            $ afterBootstrap drepA (Just True)
+            `shouldBe` Right ()
+
+        -- The registration query answers whether the ledger's DRep map holds
+        -- the credential, which it does for a DRep past its expiry epoch.
+        it "accepts an inactive DRep, which the ledger holds as registered"
+            $ afterBootstrap drepA (Just True)
+            `shouldBe` Right ()
+
+        it "never refuses Abstain or NoConfidence" $ do
+            afterBootstrap Abstain (Just False) `shouldBe` Right ()
+            afterBootstrap NoConfidence (Just False) `shouldBe` Right ()
+
+        it "does not refuse without an answer about the registration"
+            $ afterBootstrap drepA Nothing
+            `shouldBe` Right ()
+
+        it "does not refuse in the bootstrap phase"
+            $ WD.guardDRepRegistered True drepA (Just False)
+            `shouldBe` Right ()
+
     describe "withdrawalPermitted" $ do
         let keyAccount = FromKeyHash (BS.replicate 28 3)
             scriptAccount = FromScriptHash (BS.replicate 28 4)
@@ -445,9 +514,8 @@ spec = describe "Cardano.Wallet.DelegationSpec" $ do
     pidUnknown = PoolId "unknown"
     knownPools = Set.fromList [pidA, pidB]
     noRetirementPlanned = Nothing
-    drepA =
-        FromDRepID
-            (DRepFromKeyHash (DRepKeyHash (BS.replicate 28 1)))
+    drepIdA = DRepFromKeyHash (DRepKeyHash (BS.replicate 28 1))
+    drepA = FromDRepID drepIdA
     drepB =
         FromDRepID
             (DRepFromKeyHash (DRepKeyHash (BS.replicate 28 2)))
@@ -467,7 +535,13 @@ spec = describe "Cardano.Wallet.DelegationSpec" $ do
         WalletDelegation (Voting drepA) [at 1 (Delegating pidA)]
     supersededAToAbstain =
         WalletDelegation (Voting drepA) [at 1 (Voting Abstain)]
-    vote = WD.joinDRepVotingAction Write.RecentEraConway
+    notVoted = activeOnly NotDelegating
+    votedA = activeOnly (Voting drepA)
+    votedAbstain = activeOnly (Voting Abstain)
+    -- The #5350 examples above decide with the ledger value unread.
+    vote = voteWith Nothing
+    voteWith ledger target =
+        WD.joinDRepVotingAction Write.RecentEraConway target ledger
 
 {-------------------------------------------------------------------------------
                                     Properties
@@ -577,6 +651,7 @@ prop_joinDRepVotingActionEffective target dlg registered =
         $ WD.joinDRepVotingAction
             Write.RecentEraConway
             target
+            Nothing
             dlg
             registered
             === expected
@@ -592,23 +667,51 @@ prop_joinDRepVotingActionEffective target dlg registered =
             && (statusDRep (effectiveStatus dlg) /= Just target)
 
 -- The F1/F2 parity surface, not a formal-law mirror: the pure
--- duplicate-vote verdict consumed by the IO path must agree with the
--- verdict that the transaction-building path acts on.
+-- duplicate-vote verdict of 'WD.joinDRepVotingAction' must agree with the
+-- verdict of 'WD.ledgerVoteRequestFor', which the transaction-building path
+-- acts on, for every ledger value and history.
 prop_joinDRepParityWithVoteRequest
     :: DRep -> WalletDelegation -> Bool -> Property
 prop_joinDRepParityWithVoteRequest target dlg registered =
-    case (WD.voteRequestFor target dlg, action) of
-        (VotedSameAsBefore, Left (W.ErrAlreadyVoted drep)) ->
-            drep === target
-        (VotedDifferently, Right _) -> property True
-        _ -> property False
+    forAll (genLedgerVote target) $ \ledger ->
+        checkCoverage
+            $ cover 10 (isNothing ledger) "ledger value unread"
+            $ cover 10 (ledger == Just VoteNotDelegated) "no vote delegation"
+            $ cover
+                10
+                (ledger == Just (VoteDelegatedTo target))
+                "the target is delegated to"
+            $ cover
+                10
+                (isDelegatedOtherThan ledger)
+                "another DRep is delegated to"
+            $ case (WD.ledgerVoteRequestFor target ledger dlg, action ledger) of
+                (VotedSameAsBefore, Left (W.ErrAlreadyVoted drep)) ->
+                    drep === target
+                (VotedDifferently, Right _) -> property True
+                _ -> property False
   where
-    action =
+    action ledger =
         WD.joinDRepVotingAction
             Write.RecentEraConway
             target
+            ledger
             dlg
             registered
+    isDelegatedOtherThan = \case
+        Just (VoteDelegatedTo drep) -> drep /= target
+        _ -> False
+
+-- A ledger value that is unread, holds no vote delegation, holds the given
+-- target, or holds another DRep.
+genLedgerVote :: DRep -> Gen (Maybe VoteDelegation)
+genLedgerVote target =
+    oneof
+        [ pure Nothing
+        , pure (Just VoteNotDelegated)
+        , pure (Just (VoteDelegatedTo target))
+        , Just . VoteDelegatedTo <$> arbitrary
+        ]
 
 prop_effectiveDelegationStatus
     :: WalletDelegation -> Property

@@ -405,6 +405,7 @@ import Test.Hspec
     , it
     , shouldBe
     , shouldSatisfy
+    , shouldThrow
     , xit
     )
 import Test.QuickCheck
@@ -482,6 +483,7 @@ import qualified Cardano.Wallet.Address.Derivation.Icarus as Icarus
 import qualified Cardano.Wallet.Balance.Migration as Migration
 import qualified Cardano.Wallet.DB.Sqlite.Types as DB
 import qualified Cardano.Wallet.DB.Store.Checkpoints.Store as Sqlite
+import qualified Cardano.Wallet.IO.Delegation as IODeleg
 import qualified Cardano.Wallet.Primitive.Types.TokenBundle as TokenBundle
 import qualified Cardano.Wallet.Primitive.Types.TokenMap as TokenMap
 import qualified Cardano.Wallet.Read as Read
@@ -647,6 +649,49 @@ spec = describe "Cardano.WalletSpec" $ do
                 WithdrawalSelf a p c ->
                     (a, p, c) `shouldBe` (account, path, Coin 1)
                 _ -> expectationFailure "expected a self-withdrawal"
+
+    describe "assertDRepRegistered" $ do
+        let drepId = DRepFromKeyHash (DRepKeyHash (BS.replicate 28 3))
+            drep = FromDRepID drepId
+            afterBootstrap = ledgerPParams False
+            answering answer =
+                (mockNetworkLayer :: NetworkLayer IO Read.ConsensusBlock)
+                    { isDRepRegistered = const (pure answer)
+                    }
+            -- Fails the example when the registration is queried.
+            unqueried =
+                (mockNetworkLayer :: NetworkLayer IO Read.ConsensusBlock)
+                    { isDRepRegistered = \_ -> do
+                        expectationFailure "the registration was queried"
+                        pure Nothing
+                    }
+            refused :: W.WalletException -> Bool
+            refused = \case
+                W.ExceptionVoting (W.ErrDRepNotRegistered d) -> d == drepId
+                _ -> False
+
+        it "refuses a DRep that the ledger does not hold as registered"
+            $ IODeleg.assertDRepRegistered
+                (answering (Just False))
+                afterBootstrap
+                drep
+            `shouldThrow` refused
+
+        it "accepts a DRep that the ledger holds as registered"
+            $ IODeleg.assertDRepRegistered
+                (answering (Just True))
+                afterBootstrap
+                drep
+
+        it "does not refuse without an answer about the registration"
+            $ IODeleg.assertDRepRegistered (answering Nothing) afterBootstrap drep
+
+        it "does not query the registration of Abstain or NoConfidence" $ do
+            IODeleg.assertDRepRegistered unqueried afterBootstrap Abstain
+            IODeleg.assertDRepRegistered unqueried afterBootstrap NoConfidence
+
+        it "does not query the registration in the bootstrap phase"
+            $ IODeleg.assertDRepRegistered unqueried (ledgerPParams True) drep
 
     describe "Migration" $ do
         describe "migrationPlanToSelectionWithdrawals" $ do

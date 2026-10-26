@@ -3021,7 +3021,7 @@ constructTransaction api knownPools poolStatus apiWalletId body = do
 
         when (isJust (body ^. #vote)) $ do
             whenLeft (W.votingEnabledInEra era) (liftHandler . throwE)
-            liftHandler $ W.assertDifferentVoting db optionalVoteAction era
+            liftHandler $ IODeleg.assertDifferentVoting wrk optionalVoteAction era
 
         let transactionCtx0 =
                 defaultTransactionCtx

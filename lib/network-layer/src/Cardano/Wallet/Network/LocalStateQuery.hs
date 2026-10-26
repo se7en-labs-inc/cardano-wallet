@@ -13,7 +13,8 @@ module Cardano.Wallet.Network.LocalStateQuery
     ) where
 
 import Cardano.Wallet.Network.LocalStateQuery.DReps
-    ( listDReps
+    ( isDRepRegistered
+    , listDReps
     )
 import Cardano.Wallet.Network.LocalStateQuery.Extra
     ( currentEra

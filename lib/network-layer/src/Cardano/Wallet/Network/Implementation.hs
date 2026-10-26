@@ -523,6 +523,9 @@ withNodeNetworkLayerBase
                 , listDReps =
                     bracketQuery "listDReps" tr
                         $ queryRewardQ `send` SomeLSQ LSQ.listDReps
+                , isDRepRegistered = \drep ->
+                    bracketQuery "isDRepRegistered" tr
+                        $ queryRewardQ `send` SomeLSQ (LSQ.isDRepRegistered drep)
                 , stakeDistribution =
                     _stakeDistribution queryRewardQ
                 , getUTxOByTxIn =

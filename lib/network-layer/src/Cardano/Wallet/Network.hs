@@ -56,7 +56,8 @@ import Cardano.Wallet.Primitive.Types.Coin
     ( Coin
     )
 import Cardano.Wallet.Primitive.Types.DRep
-    ( DRepRegistration
+    ( DRepID
+    , DRepRegistration
     , VoteDelegation
     )
 import Cardano.Wallet.Primitive.Types.ProtocolParameters
@@ -162,6 +163,14 @@ data NetworkLayer m block = NetworkLayer
         :: m (Maybe [DRepRegistration])
     -- ^ Query all registered DReps with their voting power and status.
     -- Returns 'Nothing' when the connected node is running a pre-Conway era.
+    , isDRepRegistered
+        :: DRepID
+        -> m (Maybe Bool)
+    -- ^ Query whether the ledger holds a DRep as registered, with the DRep's
+    -- credential only. Nothing is cached: every call queries the node.
+    --
+    -- A registered DRep past its expiry epoch is registered. Returns
+    -- 'Nothing' when the connected node is running a pre-Conway era.
     , stakeDistribution
         :: Coin -- Stake to consider for rewards
         -> m StakePoolsSummary

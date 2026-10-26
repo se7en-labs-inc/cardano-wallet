@@ -177,6 +177,7 @@ dummyNetworkLayer =
         , timeInterpreter = err "timeInterpreter"
         , syncProgress = err "syncProgress"
         , listDReps = err "listDReps"
+        , isDRepRegistered = err "isDRepRegistered"
         }
   where
     err subject =

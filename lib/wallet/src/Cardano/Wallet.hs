@@ -120,6 +120,7 @@ module Cardano.Wallet
     , setChangeAddressMode
     , setChangeAddressModeShared
     , assertIsVoting
+    , quitWithdrawal
     , assertDifferentVoting
 
       -- * Shared Wallet
@@ -1640,6 +1641,18 @@ mkExternalWithdrawal netLayer txWitnessTag mnemonic = do
     pure
         $ checkRewardIsWorthTxCost txWitnessTag pp balance Nothing
             $> WithdrawalExternal rewardAccount derivationPath balance xprv
+
+-- | The withdrawal of a transaction that quits staking, given the cached
+-- reward balance. The ledger checks a withdrawal whatever its amount, so no
+-- withdrawal is built when the balance is exactly zero.
+quitWithdrawal
+    :: RewardAccount
+    -> NonEmpty DerivationIndex
+    -> Coin
+    -> Withdrawal
+quitWithdrawal rewardAccount derivationPath balance
+    | balance == Coin 0 = NoWithdrawal
+    | otherwise = WithdrawalSelf rewardAccount derivationPath balance
 
 mkSelfWithdrawal
     :: NetworkLayer IO block

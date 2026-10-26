@@ -505,10 +505,13 @@ instance IsServerError ErrConstructTx where
         ErrConstructTxWithdrawalWithoutVoting ->
             apiError err403 WithdrawalNotPossibleWithoutVote
                 $ mconcat
-                    [ "I cannot construct a transaction that contains withdrawals "
-                    , "if the wallet is not voting in the Conway era onwards. "
-                    , "Please delegate again (in that case, the wallet will automatically vote to abstain), "
-                    , "or make a vote transaction before the withdrawal transaction."
+                    [ "I cannot build a transaction that withdraws rewards, "
+                    , "because the ledger holds no vote delegation for the "
+                    , "wallet's reward account. This is the case for a wallet "
+                    , "that never voted, and for a wallet whose DRep has "
+                    , "retired. Please delegate the vote to a DRep, to "
+                    , "'abstain' or to 'no_confidence', and wait until that "
+                    , "transaction is in the ledger before withdrawing."
                     ]
         ErrConstructTxFromMetadataEncryption ErrIncorrectRawMetadata ->
             apiError err403 InvalidMetadataEncryption

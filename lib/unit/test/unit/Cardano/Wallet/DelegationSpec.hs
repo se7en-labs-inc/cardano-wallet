@@ -43,6 +43,7 @@ import Cardano.Wallet.Primitive.Types.DRep
     , DRepID (..)
     , DRepKeyHash (..)
     , DRepScriptHash (..)
+    , VoteDelegation (..)
     )
 import Cardano.Wallet.Primitive.Types.RewardAccount
     ( RewardAccount (..)
@@ -342,6 +343,59 @@ spec = describe "Cardano.Wallet.DelegationSpec" $ do
 
         it "effectiveDelegationStatus is last next, else active"
             $ property prop_effectiveDelegationStatus
+
+    describe "withdrawalPermitted" $ do
+        let keyAccount = FromKeyHash (BS.replicate 28 3)
+            scriptAccount = FromScriptHash (BS.replicate 28 4)
+            permitted = W.withdrawalPermitted False
+
+        it
+            "refuses a retired DRep: the history names A, the ledger holds none"
+            $ permitted keyAccount (Just VoteNotDelegated) (Just drepA)
+            `shouldBe` False
+
+        it "permits a vote delegation made outside the wallet"
+            $ permitted keyAccount (Just (VoteDelegatedTo drepA)) Nothing
+            `shouldBe` True
+
+        it "permits a delegation to Abstain"
+            $ permitted keyAccount (Just (VoteDelegatedTo Abstain)) Nothing
+            `shouldBe` True
+
+        it "permits a delegation to NoConfidence"
+            $ permitted keyAccount (Just (VoteDelegatedTo NoConfidence)) Nothing
+            `shouldBe` True
+
+        it "refuses a key-hash account without a vote delegation"
+            $ permitted keyAccount (Just VoteNotDelegated) Nothing
+            `shouldBe` False
+
+        it "permits a script-hash account without a vote delegation"
+            $ permitted scriptAccount (Just VoteNotDelegated) Nothing
+            `shouldBe` True
+
+        it "permits a script-hash account whose ledger value is unread"
+            $ permitted scriptAccount Nothing Nothing
+            `shouldBe` True
+
+        it "permits every account in the bootstrap phase"
+            $ do
+                W.withdrawalPermitted True keyAccount (Just VoteNotDelegated) Nothing
+                    `shouldBe` True
+                W.withdrawalPermitted True keyAccount Nothing Nothing
+                    `shouldBe` True
+
+        it "follows a recorded vote when the ledger value is unread"
+            $ do
+                permitted keyAccount Nothing (Just drepA) `shouldBe` True
+                permitted keyAccount Nothing Nothing `shouldBe` False
+
+        it "ignores the history when the ledger value is read"
+            $ do
+                permitted keyAccount (Just (VoteDelegatedTo drepB)) (Just drepA)
+                    `shouldBe` True
+                permitted keyAccount (Just VoteNotDelegated) (Just drepA)
+                    `shouldBe` False
 
     describe "Agda #5350 law mirrors" $ do
         it "AGDA-5350-EMPTY: empty next selects active"

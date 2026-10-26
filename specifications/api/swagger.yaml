@@ -5099,8 +5099,17 @@ x-errWithdrawalNotPossibleWithoutVote: &errWithdrawalNotPossibleWithoutVote
     message:
       type: string
       description: |
-        Occurs when attempting to create a transaction that contains withdrawals
-        but previous voting was not performed (in Conway era onwards).
+        Occurs when a request would put a withdrawal from the wallet's own
+        reward account into a transaction, and the ledger holds no vote
+        delegation for that account (in Conway era onwards, outside the
+        bootstrap phase). The ledger rejects every such withdrawal, whatever
+        its amount. The account holds no vote delegation when its stake key
+        never voted, and also when the DRep it voted for has retired, because
+        a DRep's retirement removes the vote delegation of every account
+        delegated to it. To withdraw, delegate the vote to a DRep, to
+        `abstain` or to `no_confidence`, and wait until that transaction is
+        in the ledger. A shared wallet's reward account is a script hash, and
+        the ledger accepts its withdrawals without a vote delegation.
     code:
       type: string
       enum: ['withdrawal_not_possible_without_vote']
@@ -6376,7 +6385,10 @@ x-responsesCreateWalletMigrationPlan: &responsesCreateWalletMigrationPlan
     description: Forbidden
     content:
       application/json:
-        schema: *errNothingToMigrate
+        schema:
+          oneOf:
+            - <<: *errNothingToMigrate
+            - <<: *errWithdrawalNotPossibleWithoutVote
   202:
     description: Accepted
     content:
@@ -6398,6 +6410,7 @@ x-responsesMigrateWallet: &responsesMigrateWallet
             - <<: *errNothingToMigrate
             - <<: *errNoRootKey
             - <<: *errWrongEncryptionPassphrase
+            - <<: *errWithdrawalNotPossibleWithoutVote
   202:
     description: Accepted
     content:
@@ -6494,6 +6507,7 @@ x-responsesSelectCoins: &responsesSelectCoins
             - <<: *errInvalidCoinSelection
             - <<: *errOutputTokenQuantityExceedsLimit
             - <<: *errOutputTokenBundleSizeExceedsLimit
+            - <<: *errWithdrawalNotPossibleWithoutVote
   200:
     description: OK
     content:
@@ -6588,6 +6602,7 @@ x-responsesPostTransaction: &responsesPostTransaction
             - <<: *errNoRootKey
             - <<: *errWrongEncryptionPassphrase
             - <<: *errUnsupportedEra
+            - <<: *errWithdrawalNotPossibleWithoutVote
   202:
     description: Accepted
     content:
@@ -6757,6 +6772,7 @@ x-responsesPostTransactionFee: &responsesPostTransactionFee
             - <<: *errOutputTokenQuantityExceedsLimit
             - <<: *errOutputTokenBundleSizeExceedsLimit
             - <<: *errTransactionIsTooBig
+            - <<: *errWithdrawalNotPossibleWithoutVote
   202:
     description: Accepted
     content:
@@ -7027,6 +7043,7 @@ x-responsesQuitStakePool: &responsesQuitStakePool
             - <<: *errWrongEncryptionPassphrase
             - <<: *errNotDelegatingTo
             - <<: *errNonNullRewards
+            - <<: *errWithdrawalNotPossibleWithoutVote
   202:
     description: Accepted
     content:

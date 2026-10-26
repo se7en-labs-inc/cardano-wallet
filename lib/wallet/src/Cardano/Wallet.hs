@@ -96,6 +96,7 @@ module Cardano.Wallet
     , shelleyOnlyMkSelfWithdrawal
     , sharedOnlyReadRewardAccount
     , readRewardAccount
+    , readCachedVoteDelegation
     , shelleyOnlyReadRewardAccount
     , someRewardAccount
     , readPolicyPublicKey
@@ -122,7 +123,6 @@ module Cardano.Wallet
     , assertIsVoting
     , withdrawalPermitted
     , quitWithdrawal
-    , assertDifferentVoting
 
       -- * Shared Wallet
     , updateCosigner
@@ -1752,6 +1752,28 @@ readRewardAccount db = do
             case Shared.rewardAccountKey walletState of
                 Just rewardAcct -> pure (rewardAcct, Nothing, path)
                 Nothing -> throwIO $ ExceptionReadRewardAccount ErrReadRewardAccountMissing
+
+-- | The vote delegation that the ledger holds for the wallet's reward
+-- account, as of the network layer's last read.
+--
+-- 'Nothing' while the value is unread, in eras before Conway, and for a
+-- wallet without a reward account: a Byron or Icarus wallet, or a shared
+-- wallet without a delegation script template.
+readCachedVoteDelegation
+    :: forall s block
+     . WalletFlavor s
+    => NetworkLayer IO block
+    -> DBLayer IO s
+    -> IO (Maybe VoteDelegation)
+readCachedVoteDelegation nl db = case walletFlavor @s of
+    ShelleyWallet -> do
+        (rewardAccount, _, _) <- readRewardAccount db
+        getCachedVoteDelegation nl rewardAccount
+    SharedWallet -> do
+        walletState <- getState <$> readWalletCheckpoint db
+        maybe (pure Nothing) (getCachedVoteDelegation nl)
+            $ Shared.rewardAccountKey walletState
+    _ -> pure Nothing
 
 readWalletCheckpoint
     :: DBLayer IO s -> IO (Wallet s)
@@ -3666,33 +3688,6 @@ assertIsVoting nl DBLayer{..} era pp = \case
     isScriptHash = \case
         FromScriptHash _ -> True
         FromKeyHash _ -> False
-
-assertDifferentVoting
-    :: DBLayer IO s
-    -> Maybe VotingAction
-    -> Write.RecentEra era
-    -> ExceptT ErrConstructTx IO ()
-assertDifferentVoting DBLayer{..} votingActionM = \case
-    Write.RecentEraConway ->
-        liftIO (atomically $ getCurrentVoting walletState)
-            >>= checkVotingIsDifferent votingActionM
-    _ -> pure ()
-  where
-    checkVotingIsDifferent
-        :: Monad m
-        => Maybe VotingAction -> Maybe DRep -> ExceptT ErrConstructTx m ()
-    checkVotingIsDifferent vActionM = \case
-        Nothing ->
-            pure ()
-        Just currentDrep -> case vActionM of
-            Nothing ->
-                pure ()
-            Just vote -> checkDRepIsDifferent currentDrep (getDRep vote)
-    getDRep = \case
-        VoteRegisteringKey requestedDrep -> requestedDrep
-        Vote requestedDrep -> requestedDrep
-    checkDRepIsDifferent cDrep rDRep =
-        when (cDrep == rDRep) $ throwE $ ErrConstructTxVoting ErrWrongEra
 
 getCurrentVoting
     :: Functor stm

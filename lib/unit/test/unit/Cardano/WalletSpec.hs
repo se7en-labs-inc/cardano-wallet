@@ -322,6 +322,7 @@ import Data.Either
     )
 import Data.Function
     ( on
+    , (&)
     )
 import Data.Functor.Identity
     ( Identity (..)
@@ -561,6 +562,21 @@ spec = describe "Cardano.WalletSpec" $ do
         it
             "LocalTxSubmission updates are limited in frequency"
             (property prop_throttle)
+
+    describe "quitWithdrawal" $ do
+        let account = FromKeyHash (BS.replicate 28 1)
+            path = DerivationIndex 0 :| []
+        it "builds no withdrawal at a zero balance"
+            $ W.quitWithdrawal account path (Coin 0)
+            & \case
+                NoWithdrawal -> pure ()
+                _ -> expectationFailure "expected no withdrawal"
+        it "withdraws a positive balance"
+            $ W.quitWithdrawal account path (Coin 1)
+            & \case
+                WithdrawalSelf a p c ->
+                    (a, p, c) `shouldBe` (account, path, Coin 1)
+                _ -> expectationFailure "expected a self-withdrawal"
 
     describe "Migration" $ do
         describe "migrationPlanToSelectionWithdrawals" $ do

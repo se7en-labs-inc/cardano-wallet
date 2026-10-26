@@ -515,9 +515,8 @@ quitStakePool
     -> IO (W.BuiltTx, UTCTime)
 quitStakePool ctx walletId passphrase = do
     (rewardAccount, _, derivationPath) <- W.readRewardAccount db
-    withdrawal <-
-        WithdrawalSelf rewardAccount derivationPath
-            <$> getCachedRewardAccountBalance netLayer rewardAccount
+    balance <- getCachedRewardAccountBalance netLayer rewardAccount
+    let withdrawal = W.quitWithdrawal rewardAccount derivationPath balance
 
     currentEpochSlotting <- W.getCurrentEpochSlotting netLayer
     pp <- currentProtocolParameters netLayer

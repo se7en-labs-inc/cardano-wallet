@@ -27,6 +27,11 @@ pkgs.runCommand "delegation-agda"
     mkdir -p "$AGDA_DIR"
     mkdir -p "$out"
 
+    # The sandbox locale cannot encode the model's Unicode, so Agda would
+    # abort while printing an error and leave only its first lines in each
+    # mutant's log. Agda reads its output encoding from the locale.
+    export LC_ALL=C.UTF-8
+
     relative=Cardano/Wallet/Delegation.agda
 
     # The model imports nothing, so no library needs to resolve. Each caller

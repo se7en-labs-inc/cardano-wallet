@@ -95,11 +95,13 @@ import Test.QuickCheck
     , checkCoverage
     , cover
     , elements
+    , expectFailure
     , forAll
     , label
     , oneof
     , property
     , shrinkIntegral
+    , suchThat
     , vector
     , vectorOf
     , (.&&.)
@@ -508,6 +510,46 @@ spec = describe "Cardano.Wallet.DelegationSpec" $ do
             (asKey == asScript) `shouldBe` False
             structurallyEqualDRep asKey asScript `shouldBe` False
             structurallyEqualDRep asKey asKey `shouldBe` True
+
+    describe "Agda #5466 law mirrors" $ do
+        it "AGDA-5466-WDRL-LEDGER: a read ledger value decides a withdrawal"
+            $ prop_withdrawalPermittedFollowsLedger W.withdrawalPermitted
+
+        it
+            "AGDA-5466-WDRL-EXEMPT: bootstrap and script-hash accounts withdraw"
+            $ prop_withdrawalPermittedExempt W.withdrawalPermitted
+
+        it "AGDA-5466-WDRL-UNREAD: an unread ledger value defers to history"
+            $ prop_withdrawalPermittedUnreadFollowsHistory W.withdrawalPermitted
+
+        it
+            "AGDA-5466-VOTE-LEDGER: a read ledger value decides a repeated vote"
+            $ prop_ledgerVoteRequestFollowsLedger WD.ledgerVoteRequestFor
+
+        it "AGDA-5466-VOTE-UNREAD: an unread ledger value defers to #5350"
+            $ prop_ledgerVoteRequestUnreadIs5350 WD.ledgerVoteRequestFor
+
+    describe "Agda #5466 negative controls" $ do
+        it "WDRL-LEDGER refutes the decision from the history alone"
+            $ expectFailure
+            $ prop_withdrawalPermittedFollowsLedger
+                historyOnlyWithdrawalPermitted
+
+        it "WDRL-EXEMPT refutes the decision without exemptions"
+            $ expectFailure
+            $ prop_withdrawalPermittedExempt noExemptionWithdrawalPermitted
+
+        it "WDRL-UNREAD refutes permitting every unread value"
+            $ expectFailure
+            $ prop_withdrawalPermittedUnreadFollowsHistory unreadIgnoresHistory
+
+        it "VOTE-LEDGER refutes the #5350 decision from the history"
+            $ expectFailure
+            $ prop_ledgerVoteRequestFollowsLedger historyVoteRequestFor
+
+        it "VOTE-UNREAD refutes a different vote for every unread value"
+            $ expectFailure
+            $ prop_ledgerVoteRequestUnreadIs5350 unreadAlwaysDifferent
   where
     pidA = PoolId "A"
     pidB = PoolId "B"
@@ -866,6 +908,263 @@ statusDRep status = case status of
     Voting drep -> Just drep
     DelegatingVoting _ drep -> Just drep
     _ -> Nothing
+
+{-------------------------------------------------------------------------------
+                    Issue #5466: mirrors of the Agda laws
+-------------------------------------------------------------------------------}
+
+-- | The shape of 'W.withdrawalPermitted': bootstrap phase, reward account,
+-- ledger value and the history's vote.
+type WithdrawalPermittedFun =
+    Bool -> RewardAccount -> Maybe VoteDelegation -> Maybe DRep -> Bool
+
+-- | The shape of 'WD.ledgerVoteRequestFor': target, ledger value and history.
+type LedgerVoteRequestFun =
+    DRep -> Maybe VoteDelegation -> WalletDelegation -> VoteRequest
+
+-- Mirror of the Agda law AGDA-5466-WDRL-LEDGER in
+-- specifications/Cardano/Wallet/Delegation.agda: after the bootstrap phase, a
+-- key-hash reward account whose ledger value has been read may withdraw
+-- exactly when the ledger holds a vote delegation, whatever the history
+-- records. The law's scope fixes the phase and the credential kind; the
+-- oracle reads the constructor of the generated ledger value alone.
+prop_withdrawalPermittedFollowsLedger
+    :: WithdrawalPermittedFun -> Property
+prop_withdrawalPermittedFollowsLedger permitted =
+    checkCoverage $ forAll inputs $ \(account, ledger, history) ->
+        cover 30 (not (holdsVoteDelegation ledger)) "no vote delegation"
+            $ cover 30 (holdsVoteDelegation ledger) "a vote delegation"
+            $ cover
+                10
+                (not (holdsVoteDelegation ledger) && isJust history)
+                "the history records a vote that the ledger does not hold"
+            $ cover
+                10
+                (holdsVoteDelegation ledger && isNothing history)
+                "the ledger holds a vote that the history does not record"
+            $ permitted False account (Just ledger) history
+                === holdsVoteDelegation ledger
+  where
+    inputs =
+        (,,)
+            <$> genKeyHashAccount
+            <*> genReadLedgerVote
+            <*> genHistoryVote
+
+-- Mirror of the Agda law AGDA-5466-WDRL-EXEMPT: every account in the
+-- bootstrap phase, and a script-hash account in every phase, may withdraw,
+-- whatever the ledger value and the history are.
+prop_withdrawalPermittedExempt :: WithdrawalPermittedFun -> Property
+prop_withdrawalPermittedExempt permitted =
+    checkCoverage $ forAll inputs $ \((bootstrap, account), ledger, history) ->
+        let keyHash = isKeyHashAccount account
+            delegated = maybe False holdsVoteDelegation ledger
+        in  cover 20 (bootstrap && keyHash) "bootstrap phase, key-hash account"
+                $ cover
+                    20
+                    (bootstrap && not keyHash)
+                    "bootstrap phase, script-hash account"
+                $ cover
+                    20
+                    (not bootstrap && not keyHash)
+                    "after the bootstrap phase, script-hash account"
+                $ cover 20 (isNothing ledger) "ledger value unread"
+                $ cover 20 (ledger == Just VoteNotDelegated) "no vote delegation"
+                $ cover 20 delegated "a vote delegation"
+                $ cover
+                    5
+                    (not keyHash && not delegated && isNothing history)
+                    "script-hash account, no vote in the ledger or history"
+                $ permitted bootstrap account ledger history === True
+  where
+    inputs =
+        (,,)
+            <$> genExemptAccount
+            <*> genAnyLedgerVote
+            <*> genHistoryVote
+
+-- Mirror of the Agda law AGDA-5466-WDRL-UNREAD: after the bootstrap phase, a
+-- key-hash reward account whose ledger value is unread may withdraw exactly
+-- when the history records a vote. The law's scope fixes the phase, the
+-- credential kind and the ledger value.
+prop_withdrawalPermittedUnreadFollowsHistory
+    :: WithdrawalPermittedFun -> Property
+prop_withdrawalPermittedUnreadFollowsHistory permitted =
+    checkCoverage $ forAll inputs $ \(account, history) ->
+        cover 30 (isJust history) "the history records a vote"
+            $ cover 30 (isNothing history) "the history records no vote"
+            $ permitted False account Nothing history === isJust history
+  where
+    inputs = (,) <$> genKeyHashAccount <*> genHistoryVote
+
+-- Mirror of the Agda law AGDA-5466-VOTE-LEDGER: with a read ledger value, a
+-- request repeats the vote delegation in force exactly when the ledger holds
+-- a delegation to the target, whatever the history records.
+prop_ledgerVoteRequestFollowsLedger
+    :: LedgerVoteRequestFun -> Property
+prop_ledgerVoteRequestFollowsLedger decide =
+    checkCoverage $ forAll inputs $ \(target, ledger, dlg) ->
+        let inLedger = ledger == VoteDelegatedTo target
+            inHistory = statusDRep (effectiveStatus dlg) == Just target
+        in  cover 20 (ledger == VoteNotDelegated) "no vote delegation"
+                $ cover 20 inLedger "a vote delegation to the target"
+                $ cover
+                    20
+                    (holdsVoteDelegation ledger && not inLedger)
+                    "a vote delegation to another DRep"
+                $ cover
+                    10
+                    (inHistory && not inLedger)
+                    "the history votes for the target, the ledger does not"
+                $ cover
+                    10
+                    (inLedger && not inHistory)
+                    "the ledger votes for the target, the history does not"
+                $ decide target (Just ledger) dlg
+                    === if inLedger then VotedSameAsBefore else VotedDifferently
+  where
+    inputs = do
+        target <- arbitrary
+        (,,) target
+            <$> genReadLedgerVoteAround target
+            <*> genDelegationAround target
+
+-- Mirror of the Agda law AGDA-5466-VOTE-UNREAD: with the ledger value
+-- unread, the decision is the #5350 one, from the effective delegation status
+-- alone. The oracle is the independent D1 oracle of the #5350 mirrors.
+prop_ledgerVoteRequestUnreadIs5350 :: LedgerVoteRequestFun -> Property
+prop_ledgerVoteRequestUnreadIs5350 decide =
+    checkCoverage $ forAll inputs $ \(target, dlg) ->
+        let effective = statusDRep (effectiveStatus dlg) == Just target
+            inHistory =
+                Just target `elem` fmap statusDRep (historyStatuses dlg)
+        in  cover 20 effective "the effective status votes for the target"
+                $ cover
+                    20
+                    (not effective)
+                    "the effective status does not vote for the target"
+                $ cover
+                    10
+                    (inHistory && not effective)
+                    "only a superseded status votes for the target"
+                $ decide target Nothing dlg
+                    === if effective then VotedSameAsBefore else VotedDifferently
+  where
+    inputs = do
+        target <- arbitrary
+        (,) target <$> genDelegationAround target
+
+-- The pre-#5466 withdrawal decision: permitted exactly when the wallet's
+-- history records a vote. It exists only as the negative control for
+-- 'prop_withdrawalPermittedFollowsLedger', which a retired DRep separates
+-- from 'W.withdrawalPermitted': the history names it, the ledger holds no
+-- vote delegation.
+historyOnlyWithdrawalPermitted :: WithdrawalPermittedFun
+historyOnlyWithdrawalPermitted _bootstrap _rewardAccount _ledgerVote = isJust
+
+-- 'W.withdrawalPermitted' without its bootstrap and script-hash clauses: the
+-- negative control for 'prop_withdrawalPermittedExempt', which a script-hash
+-- account with no vote delegation separates from it.
+noExemptionWithdrawalPermitted :: WithdrawalPermittedFun
+noExemptionWithdrawalPermitted _bootstrap _rewardAccount ledgerVote history
+    | Just v <- ledgerVote = v /= VoteNotDelegated
+    | otherwise = isJust history
+
+-- 'W.withdrawalPermitted' with an unread clause that permits every
+-- withdrawal: the negative control for
+-- 'prop_withdrawalPermittedUnreadFollowsHistory', which an unread value with
+-- no recorded vote separates from it.
+unreadIgnoresHistory :: WithdrawalPermittedFun
+unreadIgnoresHistory bootstrap rewardAccount ledgerVote _history
+    | bootstrap = True
+    | FromScriptHash _ <- rewardAccount = True
+    | Just v <- ledgerVote = v /= VoteNotDelegated
+    | otherwise = True
+
+-- 'WD.voteRequestFor', the #5350 decision from the history alone, in the
+-- shape of 'WD.ledgerVoteRequestFor': the negative control for
+-- 'prop_ledgerVoteRequestFollowsLedger', which a retired DRep separates from
+-- it when the target is the DRep that the history names.
+historyVoteRequestFor :: LedgerVoteRequestFun
+historyVoteRequestFor target _ledgerVote = WD.voteRequestFor target
+
+-- 'WD.ledgerVoteRequestFor' with an unread clause that answers
+-- 'VotedDifferently': the negative control for
+-- 'prop_ledgerVoteRequestUnreadIs5350', which an unread value with the target
+-- as the effective DRep separates from it.
+unreadAlwaysDifferent :: LedgerVoteRequestFun
+unreadAlwaysDifferent target ledgerVote _dlg = case ledgerVote of
+    Just (VoteDelegatedTo drep)
+        | drep == target -> VotedSameAsBefore
+        | otherwise -> VotedDifferently
+    Just VoteNotDelegated -> VotedDifferently
+    Nothing -> VotedDifferently
+
+-- Whether a ledger value holds a vote delegation, read from its constructor.
+holdsVoteDelegation :: VoteDelegation -> Bool
+holdsVoteDelegation = \case
+    VoteDelegatedTo _ -> True
+    VoteNotDelegated -> False
+
+isKeyHashAccount :: RewardAccount -> Bool
+isKeyHashAccount = \case
+    FromKeyHash _ -> True
+    FromScriptHash _ -> False
+
+genKeyHashAccount :: Gen RewardAccount
+genKeyHashAccount = FromKeyHash . BS.pack <$> vector 28
+
+genScriptHashAccount :: Gen RewardAccount
+genScriptHashAccount = FromScriptHash . BS.pack <$> vector 28
+
+-- The bootstrap phase and reward accounts that the ledger exempts from
+-- holding a vote delegation: either credential kind in the bootstrap phase,
+-- and a script-hash account after it.
+genExemptAccount :: Gen (Bool, RewardAccount)
+genExemptAccount =
+    oneof
+        [ (,) True <$> genKeyHashAccount
+        , (,) True <$> genScriptHashAccount
+        , (,) False <$> genScriptHashAccount
+        ]
+
+-- A ledger value that is unread, holds no vote delegation, or holds one.
+genAnyLedgerVote :: Gen (Maybe VoteDelegation)
+genAnyLedgerVote = oneof [pure Nothing, Just <$> genReadLedgerVote]
+
+-- A read ledger value: no vote delegation, or a delegation to any DRep.
+genReadLedgerVote :: Gen VoteDelegation
+genReadLedgerVote =
+    oneof [pure VoteNotDelegated, VoteDelegatedTo <$> arbitrary]
+
+-- A read ledger value: no vote delegation, a delegation to the target, or a
+-- delegation to another DRep.
+genReadLedgerVoteAround :: DRep -> Gen VoteDelegation
+genReadLedgerVoteAround target =
+    oneof
+        [ pure VoteNotDelegated
+        , pure (VoteDelegatedTo target)
+        , VoteDelegatedTo <$> arbitrary `suchThat` (/= target)
+        ]
+
+-- The DRep of the latest vote in a wallet's delegation history, if any.
+genHistoryVote :: Gen (Maybe DRep)
+genHistoryVote = oneof [pure Nothing, Just <$> arbitrary]
+
+-- A delegation history whose effective status votes for the target, one in
+-- which only a superseded status may vote for it, or an arbitrary one.
+genDelegationAround :: DRep -> Gen WalletDelegation
+genDelegationAround target =
+    oneof
+        [ arbitrary
+        , effective <$> arbitrary <*> arbitrary
+        , superseded <$> arbitrary <*> arbitrary
+        ]
+  where
+    effective current epoch =
+        WalletDelegation current [WalletDelegationNext epoch (Voting target)]
+    superseded epoch coming =
+        WalletDelegation (Voting target) [WalletDelegationNext epoch coming]
 
 {-------------------------------------------------------------------------------
                     Arbitrary instances

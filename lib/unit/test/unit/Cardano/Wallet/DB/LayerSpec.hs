@@ -274,6 +274,7 @@ import Data.IORef
     ( atomicModifyIORef'
     , newIORef
     , readIORef
+    , writeIORef
     )
 import Data.Kind
     ( Type
@@ -709,6 +710,78 @@ fileModeSpec = do
                     `shouldBe` 1
                 putMVar resume ()
                 takeMVar finished
+
+        -- A factory records each wallet it boots or loads, and loads a
+        -- recorded wallet with one open and no migration step. A new factory
+        -- over the same directory has no record, so its load runs the
+        -- migration step first and then opens the file again; this is how
+        -- every worker that exists when the process starts is loaded.
+        -- Returns the time the load scope took to end, the number of opens
+        -- during the load, and the number of close waits that timed out.
+        let loadUnderShutdownDeadline newFactoryForLoad =
+                withSystemTempDirectory "DBFactory" $ \dir -> do
+                    deadline <- newShutdownDeadline
+                    logs <- newIORef []
+                    let tr = mkTracer $ \msg ->
+                            atomicModifyIORef' logs $ \xs -> (msg : xs, ())
+                        newFactory =
+                            newDBFactoryUsing
+                                (shutdownCloseBounds deadline)
+                                ShelleyWallet
+                                tr
+                                defaultFieldValues
+                                dummyTimeInterpreter
+                                (Just dir)
+                    booting <- newFactory
+                    withDatabaseBoot booting testWid testDBLayerParams
+                        $ \(_ :: DBLayer IO TestState) -> pure ()
+                    loading <-
+                        if newFactoryForLoad then newFactory else pure booting
+                    writeIORef logs []
+                    inside <- newEmptyMVar
+                    resume <- newEmptyMVar
+                    finished <- newEmptyMVar
+                    start <- getMonotonicTime
+                    withDatabaseLoad loading testWid
+                        $ \(DBLayer{..} :: DBLayer IO TestState) -> do
+                            void $ forkIO $ do
+                                atomically
+                                    $ liftIO
+                                    $ putMVar inside () >> takeMVar resume
+                                putMVar finished ()
+                            takeMVar inside
+                            beginShutdownAfter 0.3 deadline
+                    elapsed <- subtract start <$> getMonotonicTime
+                    msgs <- reverse <$> readIORef logs
+                    putMVar resume ()
+                    takeMVar finished
+                    pure
+                        ( elapsed
+                        , length
+                            [ ()
+                            | MsgWalletDB _ (MsgDB (MsgOpenSingleConnection _)) <-
+                                msgs
+                            ]
+                        , length
+                            [ ()
+                            | MsgWalletDB _ (MsgDB (MsgCloseWaitTimedOut _ _)) <-
+                                msgs
+                            ]
+                        )
+
+        it "withDatabaseLoad of a recorded wallet meets the deadline" $ do
+            (elapsed, opens, timedOut) <- loadUnderShutdownDeadline False
+            opens `shouldBe` 1
+            elapsed `shouldSatisfy` (>= 0.3)
+            elapsed `shouldSatisfy` (< 5)
+            timedOut `shouldBe` 1
+
+        it "withDatabaseLoad of an unrecorded wallet meets the deadline" $ do
+            (elapsed, opens, timedOut) <- loadUnderShutdownDeadline True
+            opens `shouldSatisfy` (> 1)
+            elapsed `shouldSatisfy` (>= 0.3)
+            elapsed `shouldSatisfy` (< 5)
+            timedOut `shouldBe` 1
 
     describe "Sqlite database file" $ do
         let writeSomething _ = pure ()

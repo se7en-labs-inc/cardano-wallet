@@ -60,9 +60,6 @@ import GHC.Conc
 import System.FilePath
     ( (</>)
     )
-import System.IO.Temp
-    ( withSystemTempDirectory
-    )
 import Test.Hspec
     ( Spec
     , describe
@@ -104,6 +101,9 @@ import UnliftIO.MVar
     , newEmptyMVar
     , putMVar
     , takeMVar
+    )
+import UnliftIO.Temporary
+    ( withSystemTempDirectory
     )
 import Prelude
 

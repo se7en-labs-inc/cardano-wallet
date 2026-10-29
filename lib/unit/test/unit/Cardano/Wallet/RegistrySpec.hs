@@ -84,9 +84,6 @@ import GHC.Generics
 import System.FilePath
     ( (</>)
     )
-import System.IO.Temp
-    ( withSystemTempDirectory
-    )
 import Test.Hspec
     ( Spec
     , describe
@@ -139,6 +136,9 @@ import UnliftIO.MVar
     , tryPutMVar
     , tryReadMVar
     , tryTakeMVar
+    )
+import UnliftIO.Temporary
+    ( withSystemTempDirectory
     )
 import Prelude hiding
     ( lookup

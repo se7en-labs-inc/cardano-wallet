@@ -27,6 +27,13 @@ import Cardano.Address.Script
     , Script (..)
     , ScriptTemplate (..)
     )
+import Cardano.DB.Sqlite
+    ( DBLog (..)
+    , SqliteContext (..)
+    , noAutoMigrations
+    , noManualMigration
+    , withSqliteContextFile
+    )
 import Cardano.Mnemonic
     ( SomeMnemonic (..)
     )
@@ -87,8 +94,10 @@ import Cardano.Wallet.DB
     , DBLayerParams (..)
     )
 import Cardano.Wallet.DB.Layer
-    ( DefaultFieldValues (..)
+    ( DBFactoryLog (..)
+    , DefaultFieldValues (..)
     , PersistAddressBook
+    , WalletDBLog (..)
     , newDBFactory
     )
 import Cardano.Wallet.DummyTarget.Primitive.Types
@@ -160,11 +169,17 @@ import Cardano.Wallet.Unsafe
 import Control.Concurrent.Concierge
     ( newConcierge
     )
+import Control.Exception
+    ( SomeException
+    , try
+    )
 import Control.Lens
     ( (^.)
     )
 import Control.Tracer
-    ( nullTracer
+    ( Tracer (..)
+    , emit
+    , nullTracer
     )
 import Cryptography.Hash.Core
     ( hash
@@ -172,11 +187,32 @@ import Cryptography.Hash.Core
 import Data.ByteString
     ( ByteString
     )
+import Data.Either
+    ( isLeft
+    )
+import Data.IORef
+    ( IORef
+    , modifyIORef'
+    , newIORef
+    , readIORef
+    , writeIORef
+    )
 import Data.Proxy
     ( Proxy (..)
     )
+import Database.Persist.Sqlite
+    ( PersistValue (..)
+    , rawExecute
+    )
 import Servant.Server
     ( runHandler
+    )
+import System.Directory
+    ( listDirectory
+    )
+import System.FilePath
+    ( takeExtension
+    , (</>)
     )
 import System.IO.Temp
     ( withSystemTempDirectory
@@ -186,6 +222,7 @@ import Test.Hspec
     , describe
     , it
     , shouldBe
+    , shouldSatisfy
     )
 import Prelude
 
@@ -193,6 +230,7 @@ import qualified Cardano.Api as Cardano
 import qualified Cardano.Wallet.Address.Derivation.Byron as Byron
 import qualified Cardano.Wallet.Read as Read
 import qualified Cardano.Wallet.Registry as Registry
+import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 
 spec :: Spec
@@ -209,6 +247,28 @@ spec = describe "A wallet whose worker has exited" $ do
                 (w, _) <-
                     runHandler' $ getWallet (ctx fx) mkShelleyWallet (ApiT (wid fx))
                 stateOf w `shouldBe` NotResponding
+        it "opens its database once per list request"
+            $ withDeadWallet shelleyFixture
+            $ \fx -> do
+                _ <- runHandler $ listWallets (ctx fx) mkShelleyWallet
+                readIORef (opens fx) >>= (`shouldBe` 1)
+        it "opens its database once per get request"
+            $ withDeadWallet shelleyFixture
+            $ \fx -> do
+                _ <- runHandler $ getWallet (ctx fx) mkShelleyWallet (ApiT (wid fx))
+                readIORef (opens fx) >>= (`shouldBe` 1)
+        it "opens its database once per request after a restart"
+            $ withDeadWallet shelleyFixture
+            $ \fx -> do
+                -- A new factory over the existing file has not seen the
+                -- file migrated, so its first load runs the migrations.
+                fx' <- restart fx
+                _ <- runHandler $ listWallets (ctx fx') mkShelleyWallet
+                firstLoad <- readIORef (opens fx')
+                firstLoad `shouldSatisfy` (> 1)
+                writeIORef (opens fx') 0
+                _ <- runHandler $ listWallets (ctx fx') mkShelleyWallet
+                readIORef (opens fx') >>= (`shouldBe` 1)
     describe "Shared" $ do
         it "is listed with the state not_responding"
             $ withDeadWallet sharedFixture
@@ -233,6 +293,87 @@ spec = describe "A wallet whose worker has exited" $ do
                 (w, _) <-
                     runHandler' $ getWallet (ctx fx) mkLegacyWallet (ApiT (wid fx))
                 stateOf' w `shouldBe` NotResponding
+    describe "The database factory" $ do
+        let load fx = withDatabaseLoad (factory fx) (wid fx) (\_ -> pure ())
+            countOpens fx act = do
+                writeIORef (opens fx) 0
+                _ <- act
+                readIORef (opens fx)
+            dbFile fx = do
+                names <- listDirectory (dir fx)
+                case filter ((== ".sqlite") . takeExtension) names of
+                    [name] -> pure (dir fx </> name)
+                    other -> fail ("unexpected files: " <> show other)
+            runSql file sql params =
+                withSqliteContextFile
+                    nullTracer
+                    file
+                    noManualMigration
+                    noAutoMigrations
+                    (\c -> runQuery c $ rawExecute sql params)
+                    >>= either (fail . show) pure
+            -- Make the file claim a schema version.
+            setVersion file v =
+                runSql
+                    file
+                    "UPDATE database_schema_version SET version = ?"
+                    [PersistInt64 v]
+        it "closes every connection it opens, created or loaded"
+            $ withDeadWallet shelleyFixture
+            $ \fx -> do
+                -- created by the boot
+                fst (boot fx) `shouldSatisfy` (> 0)
+                uncurry shouldBe (boot fx)
+                -- recorded by the boot
+                _ <- load fx
+                -- not recorded by a new factory
+                fx' <- restart fx
+                _ <- load fx'
+                _ <- load fx'
+                (,) <$> readIORef (opens fx) <*> readIORef (closes fx)
+                    >>= uncurry shouldBe
+                (,) <$> readIORef (opens fx') <*> readIORef (closes fx')
+                    >>= uncurry shouldBe
+        it "loads a recorded wallet with one open"
+            $ withDeadWallet shelleyFixture
+            $ \fx -> countOpens fx (load fx) >>= (`shouldBe` 1)
+        it "runs the migration step again after removeDatabase"
+            $ withDeadWallet shelleyFixture
+            $ \fx -> do
+                file <- dbFile fx
+                saved <- BS.readFile file
+                removeDatabase (factory fx) (wid fx)
+                BS.writeFile file saved
+                countOpens fx (load fx) >>= (`shouldSatisfy` (> 1))
+        it "does not record a wallet whose migration failed"
+            $ withDeadWallet shelleyFixture
+            $ \fx -> do
+                file <- dbFile fx
+                saved <- BS.readFile file
+                fx' <- restart fx
+                setVersion file 1
+                failed <- try @SomeException (load fx')
+                failed `shouldSatisfy` isLeft
+                BS.writeFile file saved
+                countOpens fx' (load fx') >>= (`shouldSatisfy` (> 1))
+        it "falls back and closes its connection when the version read fails"
+            $ withDeadWallet shelleyFixture
+            $ \fx -> do
+                file <- dbFile fx
+                runSql file "DROP TABLE database_schema_version" []
+                writeIORef (opens fx) 0
+                writeIORef (closes fx) 0
+                -- Whether the full load succeeds is not the point.
+                _ <- try @SomeException (load fx)
+                o <- readIORef (opens fx)
+                o `shouldSatisfy` (> 1)
+                readIORef (closes fx) >>= (`shouldBe` o)
+        it "runs the migration step when a recorded file is no longer current"
+            $ withDeadWallet shelleyFixture
+            $ \fx -> do
+                file <- dbFile fx
+                setVersion file 99
+                countOpens fx (load fx) >>= (`shouldSatisfy` (> 1))
   where
     stateOf :: ApiWallet -> SyncProgress
     stateOf w = getApiT (w ^. #state)
@@ -259,6 +400,15 @@ data Fixture s = Fixture
     { ctx :: ApiLayer s
     , factory :: DBFactory IO s
     , wid :: WalletId
+    , dir :: FilePath
+    , opens :: IORef Int
+    -- ^ Number of times a database file was opened since last reset.
+    , closes :: IORef Int
+    -- ^ Number of times a database file was closed.
+    , boot :: (Int, Int)
+    -- ^ Opens and closes made while the wallet's database was created.
+    , restart :: IO (Fixture s)
+    -- ^ The same directory behind a new database factory and an empty counter.
     }
 
 -- | Flavor, transaction layer and database parameters of a test wallet.
@@ -278,13 +428,16 @@ withDeadWallet (Wallet wf tl ps) action =
     withSystemTempDirectory "dead-wallet" $ \tmp -> do
         let walletId = WalletId (hash ("dead-wallet" :: ByteString))
             mk = do
+                counter <- newIORef 0
+                closed <- newIORef 0
+                let tr = Tracer $ emit $ \case
+                        MsgWalletDB _ (MsgDB (MsgOpenSingleConnection _)) ->
+                            modifyIORef' counter (+ 1)
+                        MsgWalletDB _ (MsgDB (MsgCloseSingleConnection _)) ->
+                            modifyIORef' closed (+ 1)
+                        _ -> pure ()
                 df <-
-                    newDBFactory
-                        wf
-                        nullTracer
-                        defaultFieldValues
-                        dummyTimeInterpreter
-                        (Just tmp)
+                    newDBFactory wf tr defaultFieldValues dummyTimeInterpreter (Just tmp)
                 registry <- Registry.empty
                 tokenMetadata <- newMetadataClient nullTracer Nothing
                 locks <- newConcierge
@@ -304,10 +457,18 @@ withDeadWallet (Wallet wf tl ps) action =
                         { ctx = api
                         , factory = df
                         , wid = walletId
+                        , dir = tmp
+                        , opens = counter
+                        , closes = closed
+                        , boot = (0, 0)
+                        , restart = mk
                         }
         fx <- mk
         withDatabaseBoot (factory fx) walletId ps (\_ -> pure ())
-        action fx
+        booted <- (,) <$> readIORef (opens fx) <*> readIORef (closes fx)
+        writeIORef (opens fx) 0
+        writeIORef (closes fx) 0
+        action fx{boot = booted}
   where
     networkLayer =
         dummyNetworkLayer

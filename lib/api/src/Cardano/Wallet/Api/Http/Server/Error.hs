@@ -1424,6 +1424,11 @@ instance IsServerError (Request, ServerError) where
         | isDappPath req && isStandardTransportError body = err
         | isDappPath req && normalizeDappTransport code body =
             dappServerError InvalidDappRequest
+        -- Servant's own rejections on a dApp route, a malformed path
+        -- parameter (400) or a method the route does not serve (405), are
+        -- invalid requests, not backend failures.
+        | isDappPath req && code `elem` [400, 405] =
+            dappServerError InvalidDappRequest
         | isDappPath req =
             dappServerError DappInternalErrorResponse
         | isJSON body = err

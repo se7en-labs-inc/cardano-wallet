@@ -27,6 +27,10 @@ module Cardano.WalletSpec
 import Cardano.Address.Derivation
     ( XPrv
     )
+import Cardano.Api
+    ( AnyCardanoEra (AnyCardanoEra)
+    , CardanoEra (ConwayEra)
+    )
 import Cardano.Balance.Tx.Balance
     ( ErrBalanceTx (..)
     , ErrBalanceTxAssetsInsufficientError (..)
@@ -533,7 +537,8 @@ spec = describe "Cardano.WalletSpec" $ do
             calls <- newIORef (0 :: Int)
             let network =
                     dummyNetworkLayer
-                        { getDappTransactionContext = \_ _ -> do
+                        { currentNodeEra = pure (Read.EraValue Read.Conway)
+                        , getDappTransactionContext = \_ _ -> do
                             modifyIORef' calls (+ 1)
                             pure $ Left ErrDappTransactionContextPointUnavailable
                         }
@@ -558,18 +563,19 @@ spec = describe "Cardano.WalletSpec" $ do
                         { atomicallyReadContext = \action -> do
                             result <- atomically action
                             clock <- atomicModifyIORef' clocks $ \n ->
-                                (n + 1, ContextClock n 0 0 False)
+                                (n + 1, ContextClock 0 n 0 False)
                             pure (result, clock)
                         , ..
                         }
                 network =
                     dummyNetworkLayer
-                        { getDappTransactionContext = \_ _ -> do
+                        { currentNodeEra = pure (Read.EraValue Read.Conway)
+                        , getDappTransactionContext = \_ _ -> do
                             modifyIORef' calls (+ 1)
                             pure
                                 $ Right
                                 $ DappTransactionContext
-                                    (error "context era is not assembled")
+                                    (AnyCardanoEra ConwayEra)
                                     (error "protocol parameters are not assembled")
                                     (error "UTxO is not assembled")
                         }

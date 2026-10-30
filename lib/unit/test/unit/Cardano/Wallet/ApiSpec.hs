@@ -181,7 +181,7 @@ spec = do
         describe "Malformed PathParam" $ do
             forM_ tests $ \(req, msg) ->
                 it (titleize proxy req)
-                    $ runSession (spec_MalformedParam req msg) application
+                    $ runSession (spec_MalformedPathParam req msg) application
 
     gSpec (everyBodyParam api) $ \(SomeTest proxy tests) ->
         describe "Malformed BodyParam" $ do
@@ -241,6 +241,25 @@ spec_MalformedParam malformedRequest expectedError = do
         "bad_request"
         expectedError
         response
+
+-- | The submission route answers a malformed path parameter without the
+-- parser's text, as 'dapp_invalid_request'; its other transport errors keep
+-- their standard codes.
+spec_MalformedPathParam :: Request -> ExpectedError -> Session ()
+spec_MalformedPathParam malformedRequest expectedError
+    | isDappSubmission malformedRequest = do
+        response <- request malformedRequest
+        assertErrorResponse
+            400
+            "dapp_invalid_request"
+            "Invalid backend request"
+            response
+    | otherwise = spec_MalformedParam malformedRequest expectedError
+  where
+    isDappSubmission req = case pathInfo req of
+        "v2" : "wallets" : _walletId : "transaction-submission" : _ -> True
+        "wallets" : _walletId : "transaction-submission" : _ -> True
+        _ -> False
 
 spec_WrongAcceptHeader :: Request -> ExpectedError -> Session ()
 spec_WrongAcceptHeader malformedRequest expectedError = do

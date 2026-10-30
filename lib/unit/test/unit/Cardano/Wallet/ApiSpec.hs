@@ -181,7 +181,7 @@ spec = do
         describe "Malformed PathParam" $ do
             forM_ tests $ \(req, msg) ->
                 it (titleize proxy req)
-                    $ runSession (spec_MalformedParam req msg) application
+                    $ runSession (spec_MalformedPathParam req msg) application
 
     gSpec (everyBodyParam api) $ \(SomeTest proxy tests) ->
         describe "Malformed BodyParam" $ do
@@ -235,17 +235,47 @@ assertErrorResponse status code (ExpectedError msg) response = do
 spec_MalformedParam :: Request -> ExpectedError -> Session ()
 spec_MalformedParam malformedRequest expectedError = do
     response <- request malformedRequest
-    assertErrorResponse 400 "bad_request" expectedError response
+    assertEndpointError
+        malformedRequest
+        400
+        "bad_request"
+        expectedError
+        response
+
+-- | The submission route answers a malformed path parameter without the
+-- parser's text, as 'dapp_invalid_request'; its other transport errors keep
+-- their standard codes.
+spec_MalformedPathParam :: Request -> ExpectedError -> Session ()
+spec_MalformedPathParam malformedRequest expectedError
+    | isDappSubmission malformedRequest = do
+        response <- request malformedRequest
+        assertErrorResponse
+            400
+            "dapp_invalid_request"
+            "Invalid backend request"
+            response
+    | otherwise = spec_MalformedParam malformedRequest expectedError
+  where
+    isDappSubmission req = case pathInfo req of
+        "v2" : "wallets" : _walletId : "transaction-submission" : _ -> True
+        "wallets" : _walletId : "transaction-submission" : _ -> True
+        _ -> False
 
 spec_WrongAcceptHeader :: Request -> ExpectedError -> Session ()
 spec_WrongAcceptHeader malformedRequest expectedError = do
     response <- request malformedRequest
-    assertErrorResponse 406 "not_acceptable" expectedError response
+    assertEndpointError
+        malformedRequest
+        406
+        "not_acceptable"
+        expectedError
+        response
 
 spec_WrongContentTypeHeader :: Request -> ExpectedError -> Session ()
 spec_WrongContentTypeHeader malformedRequest expectedError = do
     response <- request malformedRequest
-    assertErrorResponse
+    assertEndpointError
+        malformedRequest
         415
         "unsupported_media_type"
         expectedError
@@ -254,7 +284,44 @@ spec_WrongContentTypeHeader malformedRequest expectedError = do
 spec_NotAllowedMethod :: Request -> ExpectedError -> Session ()
 spec_NotAllowedMethod malformedRequest expectedError = do
     response <- request malformedRequest
-    assertErrorResponse 405 "method_not_allowed" expectedError response
+    assertEndpointError
+        malformedRequest
+        405
+        "method_not_allowed"
+        expectedError
+        response
+
+assertEndpointError
+    :: Request -> Int -> Text -> ExpectedError -> SResponse -> Session ()
+assertEndpointError request' status code expected response
+    | isDappBackend request' =
+        assertErrorResponse
+            400
+            "dapp_invalid_request"
+            "Invalid backend request"
+            response
+    | otherwise = assertErrorResponse status code expected response
+  where
+    isDappBackend req = case pathInfo req of
+        "v2" : "wallets" : _walletId : route : _
+            | route
+                `elem`
+                    [ "transaction-context"
+                    , "transaction-witnesses"
+                    , "data-signatures"
+                    , "cip95-key-state"
+                    ] ->
+                True
+        "wallets" : _walletId : route : _
+            | route
+                `elem`
+                    [ "transaction-context"
+                    , "transaction-witnesses"
+                    , "data-signatures"
+                    , "cip95-key-state"
+                    ] ->
+                True
+        _ -> False
 
 --
 -- Generic API Spec

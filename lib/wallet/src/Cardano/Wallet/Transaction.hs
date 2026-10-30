@@ -161,6 +161,9 @@ import Data.Map.Strict
 import Data.Monoid.Monus
     ( (<\>)
     )
+import Data.Set
+    ( Set
+    )
 import Data.Text
     ( Text
     )
@@ -178,6 +181,7 @@ import qualified Cardano.Wallet.Primitive.Types.Tx.TxOut as TxOut
 import qualified Cardano.Wallet.Read as Read
 import qualified Data.Foldable as F
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 
 data TransactionLayer (k :: Depth -> Type -> Type) ktype tx = TransactionLayer
     { addVkWitnesses
@@ -242,6 +246,8 @@ data TransactionCtx = TransactionCtx
     -- ^ A map of script hashes related to inputs. Only for multisig wallets
     , txReferenceScript :: Maybe (Script KeyHash)
     -- ^ The reference script.
+    , txPreferredCollateral :: Set TxIn
+    -- ^ Exclude these inputs from ordinary selection unless balancing requires them.
     }
     deriving (Generic)
 
@@ -337,6 +343,7 @@ defaultTransactionCtx =
         , txStakingCredentialScriptTemplate = Nothing
         , txNativeScriptInputs = Map.empty
         , txReferenceScript = Nothing
+        , txPreferredCollateral = Set.empty
         }
 
 -- | User-requested action related to a delegation

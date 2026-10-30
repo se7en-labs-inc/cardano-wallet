@@ -107,6 +107,9 @@ import Cardano.Wallet.Primitive.Types.DRep
 import Cardano.Wallet.Primitive.Types.RewardAccount
     ( RewardAccount
     )
+import Cardano.Wallet.Primitive.Types.Tx.TxIn
+    ( TxIn
+    )
 import Cardano.Wallet.Transaction
     ( PreSelection (..)
     , TransactionCtx (..)
@@ -259,8 +262,9 @@ selectCoinsForJoin
     -> Set PoolId
     -> PoolId
     -> PoolLifeCycleStatus
+    -> Set TxIn
     -> IO W.CoinSelection
-selectCoinsForJoin ctx pools poolId poolStatus = do
+selectCoinsForJoin ctx pools poolId poolStatus preferredCollateral = do
     (Write.PParamsInAnyRecentEra era pp, timeTranslation) <-
         W.readNodeTipStateForTxWrite netLayer
     currentEpochSlotting <- W.getCurrentEpochSlotting netLayer
@@ -289,6 +293,7 @@ selectCoinsForJoin ctx pools poolId poolStatus = do
                 { txDelegationAction = Just action
                 , txVotingAction = optionalVoteAction
                 , txDeposit = Just $ W.getStakeKeyDeposit pp
+                , txPreferredCollateral = preferredCollateral
                 }
 
     let paymentOuts = []
@@ -325,8 +330,9 @@ selectCoinsForQuit
        , DelegationAddress k 'CredFromKeyK
        )
     => WalletLayer IO s
+    -> Set TxIn
     -> IO W.CoinSelection
-selectCoinsForQuit ctx = do
+selectCoinsForQuit ctx preferredCollateral = do
     (Write.PParamsInAnyRecentEra era pp, timeTranslation) <-
         W.readNodeTipStateForTxWrite netLayer
     currentEpochSlotting <- W.getCurrentEpochSlotting netLayer
@@ -348,6 +354,7 @@ selectCoinsForQuit ctx = do
                 { txDelegationAction = Just action
                 , txWithdrawal = withdrawal
                 , txDeposit = Just $ W.getStakeKeyDeposit pp
+                , txPreferredCollateral = preferredCollateral
                 }
 
     let paymentOuts = []
@@ -439,8 +446,9 @@ joinStakePool
     -> PoolId
     -> PoolLifeCycleStatus
     -> Passphrase "user"
+    -> Set TxIn
     -> IO (W.BuiltTx, UTCTime)
-joinStakePool ctx wid pools poolId poolStatus passphrase = do
+joinStakePool ctx wid pools poolId poolStatus passphrase preferredCollateral = do
     pp <- currentProtocolParameters netLayer
     currentEpochSlotting <- W.getCurrentEpochSlotting netLayer
     calculateWalletDelegations <-
@@ -466,6 +474,7 @@ joinStakePool ctx wid pools poolId poolStatus passphrase = do
                 , txDelegationAction = Just delegation
                 , txVotingAction = votingM
                 , txDeposit = Just $ stakeKeyDeposit pp
+                , txPreferredCollateral = preferredCollateral
                 }
 
     let changeAddrGen = W.defaultChangeAddressGen @s (delegationAddressS @n)
@@ -547,8 +556,9 @@ quitStakePool
     => WalletLayer IO s
     -> WalletId
     -> Passphrase "user"
+    -> Set TxIn
     -> IO (W.BuiltTx, UTCTime)
-quitStakePool ctx walletId passphrase = do
+quitStakePool ctx walletId passphrase preferredCollateral = do
     (rewardAccount, _, derivationPath) <- W.readRewardAccount db
     balance <- getCachedRewardAccountBalance netLayer rewardAccount
     let withdrawal = W.quitWithdrawal rewardAccount derivationPath balance
@@ -569,6 +579,7 @@ quitStakePool ctx walletId passphrase = do
                 , txValidityInterval = (Nothing, ttl)
                 , txDelegationAction = Just action
                 , txDeposit = Just $ stakeKeyDeposit pp
+                , txPreferredCollateral = preferredCollateral
                 }
 
     let changeAddrGen = W.defaultChangeAddressGen (delegationAddressS @n)

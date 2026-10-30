@@ -20,9 +20,12 @@ module Cardano.Wallet.DB
       DBLayer (..)
     , DBFactory (..)
     , DBLayerParams (..)
+    , ContextChange (..)
+    , ContextClock (..)
 
       -- * DBLayer building blocks
     , DBLayerCollection (..)
+    , DBDurableSubmissions (..)
     , DBCheckpoints (..)
     , DBTxHistory (..)
     , mkDBLayerFromParts
@@ -36,12 +39,18 @@ import Cardano.Wallet.DB.Errors
 import Cardano.Wallet.DB.Migration
     ( Version
     )
+import Cardano.Wallet.DB.Sqlite.Types
+    ( TxId
+    )
 import Cardano.Wallet.DB.Store.Submissions.Layer
     ( getInSubmissionTransaction
     , getInSubmissionTransactions
     )
 import Cardano.Wallet.DB.Store.Submissions.Operations
-    ( SubmissionMeta (..)
+    ( DurableSubmission
+    , DurableSubmissionInput
+    , DurableSubmissionInsert
+    , SubmissionMeta (..)
     , TxSubmissions
     , TxSubmissionsStatus
     )
@@ -148,8 +157,14 @@ import Data.Ord
 import Data.Store
     ( Store (..)
     )
+import Data.Time.Clock
+    ( UTCTime
+    )
 import Data.Traversable
     ( for
+    )
+import Data.Word
+    ( Word64
     )
 import GHC.Num
     ( Natural
@@ -185,6 +200,8 @@ data DBFactory m s = DBFactory
     -- connection so long as necessary.
     , removeDatabase :: WalletId -> IO ()
     -- ^ Erase any trace of the database
+    , markDatabaseDeleted :: WalletId -> IO ()
+    -- ^ Mark the current wallet incarnation unavailable before stopping it.
     , listDatabases :: IO [WalletId]
     -- ^ List existing wallet database found on disk.
     }
@@ -234,8 +251,8 @@ data DBLayer m s = forall stm. (MonadIO stm, MonadFail stm) => DBLayer
     , putTxHistory :: [(Tx, TxMeta)] -> stm ()
     -- ^ Augments the transaction history for a known wallet.
     --
-    -- If an entry for a particular transaction already exists it is not
-    -- altered nor merged (just ignored).
+    -- Existing metadata is replaced; callers inserting pending history must
+    -- not overwrite a transaction already discovered on-chain.
     , readTransactions
         :: Maybe Coin
         -> SortOrder
@@ -282,7 +299,51 @@ data DBLayer m s = forall stm. (MonadIO stm, MonadFail stm) => DBLayer
     , atomically
         :: forall a. stm a -> m a
     -- ^ Execute operations of the database in isolation and atomically.
+    , atomicallyWithContextChange
+        :: forall a. ContextChange -> stm a -> m a
+    , atomicallyReadContext
+        :: forall a. stm a -> m (a, ContextClock)
+    , insertDurableSubmission
+        :: DurableSubmission
+        -> [DurableSubmissionInput]
+        -> stm DurableSubmissionInsert
+    -- ^ The durable wallet-scoped submission journal. These operations share
+    -- the same database transaction boundary as context changes.
+    , updateDurableSubmission
+        :: DurableSubmission
+        -> stm ()
+    -- ^ Unconditional transition for synchronous transaction-local work.
+    -- Asynchronous readers must use 'compareAndUpdateDurableSubmission'.
+    , compareAndUpdateDurableSubmission
+        :: DurableSubmission
+        -> DurableSubmission
+        -> stm (Maybe DurableSubmission)
+    -- ^ Compare the complete expected predecessor, then atomically transition
+    -- its state and claims. Return the persisted row, unchanged on mismatch,
+    -- or 'Nothing' only when absent. Use for asynchronous completions.
+    , claimDurableSubmissionAttempt
+        :: TxId
+        -> Word64
+        -> UTCTime
+        -> stm (Maybe DurableSubmission)
+    , readDurableSubmissions
+        :: stm [DurableSubmission]
     }
+
+data ContextChange
+    = NoContextChange
+    | WalletContextChange
+    | PendingContextChange
+    | WalletAndPendingContextChange
+    deriving (Eq, Show)
+
+data ContextClock = ContextClock
+    { walletGeneration :: !Word64
+    , pendingGeneration :: !Word64
+    , contextIncarnation :: !Word64
+    , contextDeleted :: !Bool
+    }
+    deriving (Eq, Show)
 
 {- Note [DBLayerRecordFields]
 
@@ -316,7 +377,14 @@ pattern match here!
 -}
 
 hoistDBLayer :: (forall a. m a -> n a) -> DBLayer m s -> DBLayer n s
-hoistDBLayer f DBLayer{..} = DBLayer{atomically = f . atomically, ..}
+hoistDBLayer f DBLayer{..} =
+    DBLayer
+        { atomically = f . atomically
+        , atomicallyWithContextChange = \change ->
+            f . atomicallyWithContextChange change
+        , atomicallyReadContext = f . atomicallyReadContext
+        , ..
+        }
 
 {-----------------------------------------------------------------------------
     Build DBLayer from smaller parts
@@ -357,6 +425,29 @@ data DBLayerCollection stm m s = DBLayerCollection
         :: forall a. stm a -> m a
     , transactionsStore_
         :: Store stm QueryTxWalletsHistory DeltaTxWalletsHistory
+    , durableSubmissions_ :: DBDurableSubmissions stm
+    }
+
+-- | Durable external-submission actions supplied by the concrete database.
+data DBDurableSubmissions stm = DBDurableSubmissions
+    { insertDurableSubmission_
+        :: DurableSubmission
+        -> [DurableSubmissionInput]
+        -> stm DurableSubmissionInsert
+    , updateDurableSubmission_
+        :: DurableSubmission
+        -> stm ()
+    , compareAndUpdateDurableSubmission_
+        :: DurableSubmission
+        -> DurableSubmission
+        -> stm (Maybe DurableSubmission)
+    , claimDurableSubmissionAttempt_
+        :: TxId
+        -> Word64
+        -> UTCTime
+        -> stm (Maybe DurableSubmission)
+    , readDurableSubmissions_
+        :: stm [DurableSubmission]
     }
 
 {- HLINT ignore mkDBLayerFromParts "Avoid lambda" -}
@@ -364,7 +455,7 @@ data DBLayerCollection stm m s = DBLayerCollection
 -- | Create a legacy 'DBLayer' from smaller database layers.
 mkDBLayerFromParts
     :: forall stm m s
-     . (MonadIO stm, MonadFail stm)
+     . (MonadIO stm, MonadFail stm, Functor m)
     => TimeInterpreter IO
     -> WalletId
     -> DBLayerCollection stm m s
@@ -435,6 +526,16 @@ mkDBLayerFromParts ti wid_ DBLayerCollection{..} =
         , rollbackTo = rollbackTo_
         , getSchemaVersion = getSchemaVersion_
         , atomically = atomically_
+        , atomicallyWithContextChange = const atomically_
+        , atomicallyReadContext = \action ->
+            (\result -> (result, ContextClock 0 0 0 False)) <$> atomically_ action
+        , insertDurableSubmission = insertDurableSubmission_ durableSubmissions_
+        , updateDurableSubmission = updateDurableSubmission_ durableSubmissions_
+        , compareAndUpdateDurableSubmission =
+            compareAndUpdateDurableSubmission_ durableSubmissions_
+        , claimDurableSubmissionAttempt =
+            claimDurableSubmissionAttempt_ durableSubmissions_
+        , readDurableSubmissions = readDurableSubmissions_ durableSubmissions_
         }
   where
     withSubmissions :: forall a. (TxSubmissions -> stm a) -> stm a

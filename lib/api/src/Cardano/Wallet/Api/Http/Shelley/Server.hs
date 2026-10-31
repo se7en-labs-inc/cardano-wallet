@@ -733,9 +733,6 @@ import Cardano.Wallet.Primitive.Types.Tx.TransactionInfo
 import Cardano.Wallet.Primitive.Types.Tx.TxExtended
     ( TxExtended (..)
     )
-import Cardano.Wallet.Primitive.Types.ValidityIntervalExplicit
-    ( ValidityIntervalExplicit (..)
-    )
 import Cardano.Wallet.Primitive.Types.Tx.TxIn
     ( TxIn (..)
     )
@@ -748,6 +745,9 @@ import Cardano.Wallet.Primitive.Types.Tx.TxMetadata
     )
 import Cardano.Wallet.Primitive.Types.Tx.TxOut
     ( TxOut (..)
+    )
+import Cardano.Wallet.Primitive.Types.ValidityIntervalExplicit
+    ( ValidityIntervalExplicit (..)
     )
 import Cardano.Wallet.Read.Eras
     ( EraValue (..)
@@ -4185,7 +4185,6 @@ submitTransaction
     -> ApiSerialisedTransaction
     -> Handler ApiTxId
 submitTransaction ctx apiw@(ApiT wid) apitx = do
-
     let sealedTx = getApiT . (view #serialisedTxSealed) $ apitx
 
     apiDecoded <-
@@ -4194,7 +4193,7 @@ submitTransaction ctx apiw@(ApiT wid) apitx = do
             apiw
             (toApiDecodeTransactionPostData apitx)
     let expiration =
-            (\(ApiValidityIntervalExplicit interval) ->
+            ( \(ApiValidityIntervalExplicit interval) ->
                 SlotNo $ getQuantity $ interval ^. #invalidHereafter
             )
                 <$> (apiDecoded ^. #validityInterval)
@@ -4229,40 +4228,40 @@ submitTransaction ctx apiw@(ApiT wid) apitx = do
             (WalletSubmission wid)
         $ withWorkerCtx ctx wid liftE liftE
         $ \wrk -> do
-        let tx =
-                walletTx
-                    $ decodeTx tl (Read.EraValue Read.Dijkstra) sealedTx
-            db = wrk ^. dbLayer
-        expirySlot <- maybe
-            (liftIO $ W.transactionExpirySlot (NW.timeInterpreter nl) Nothing)
-            pure
-            expiration
-        let txCtx =
-                defaultTransactionCtx
-                    { txValidityInterval = (Nothing, expirySlot)
-                    }
-        txMeta <-
-            handler
-                $ W.constructTxMeta
+            let tx =
+                    walletTx
+                        $ decodeTx tl (Read.EraValue Read.Dijkstra) sealedTx
+                db = wrk ^. dbLayer
+            expirySlot <-
+                maybe
+                    (liftIO $ W.transactionExpirySlot (NW.timeInterpreter nl) Nothing)
+                    pure
+                    expiration
+            let txCtx =
+                    defaultTransactionCtx
+                        { txValidityInterval = (Nothing, expirySlot)
+                        }
+            txMeta <-
+                handler
+                    $ W.constructTxMeta
+                        db
+                        txCtx
+                        (getOurInps apiDecoded)
+                        (getOurOuts apiDecoded)
+            liftHandler
+                $ W.submitTx
+                    (wrk ^. logger)
                     db
-                    txCtx
-                    (getOurInps apiDecoded)
-                    (getOurOuts apiDecoded)
-        liftHandler
-            $ W.submitTx
-                (wrk ^. logger)
-                db
-                nl
-                BuiltTx
-                    { builtTx = tx
-                    , builtTxMeta = txMeta
-                    , builtSealedTx = sealedTx
-                    }
+                    nl
+                    BuiltTx
+                        { builtTx = tx
+                        , builtTxMeta = txMeta
+                        , builtSealedTx = sealedTx
+                        }
     pure $ ApiTxId (apiDecoded ^. #id)
   where
     tl = ctx ^. W.transactionLayer @k @'CredFromKeyK
     nl = ctx ^. networkLayer
-
 
     countJoinsQuits :: [ApiAnyCertificate n] -> Int
     countJoinsQuits =
@@ -5920,15 +5919,22 @@ postDappSubmission
     -> ApiT WalletId
     -> ApiDappSubmissionRequest
     -> Handler ApiDappSubmissionResponse
-postDappSubmission ctx (ApiT walletId)
-    ApiDappSubmissionRequest{network = requestNetwork, transaction = ApiDappHex bytes} = do
+postDappSubmission
+    ctx
+    (ApiT walletId)
+    ApiDappSubmissionRequest
+        { network = requestNetwork
+        , transaction = ApiDappHex bytes
+        } = do
         expectedNetwork <- either throwDapp pure $ configuredNetwork @n ctx
         unless (requestNetwork == expectedNetwork)
             $ throwDapp DappAccountChangedError
         liftIO (NW.currentNodeEra $ ctx ^. networkLayer)
             >>= either throwDapp pure . requireConwayNodeEra
         decoded <- either throwDapp pure $ decodeDappTx (ApiDappHex bytes)
-        sealed <- either (const $ throwDapp InvalidDappRequest) pure $ sealedTxFromBytes bytes
+        sealed <-
+            either (const $ throwDapp InvalidDappRequest) pure
+                $ sealedTxFromBytes bytes
         -- This decoder only consumes sealed bytes. It produces the body id,
         -- input claims and validity bound before 'submitWalletScoped' can
         -- enter its one-shot node attempt.
@@ -5940,7 +5946,7 @@ postDappSubmission ctx (ApiT walletId)
             tx = walletTx extended
             Hash txBytes = tx ^. #txId
             expiration =
-                (\ValidityIntervalExplicit{invalidHereafter} ->
+                ( \ValidityIntervalExplicit{invalidHereafter} ->
                     SlotNo $ getQuantity invalidHereafter
                 )
                     <$> validity extended
@@ -5949,23 +5955,23 @@ postDappSubmission ctx (ApiT walletId)
             atomicallyWithHandler
                 (ctx ^. walletLocks)
                 (WalletSubmission walletId)
-            $ withWorkerCtx
-                ctx
-                walletId
-                (const $ throwDapp DappAccountChangedError)
-                (const $ throwDapp DappContextUnavailableError)
-            $ \worker -> do
-                liftIO (NW.currentNodeEra $ ctx ^. networkLayer)
-                    >>= either throwDapp pure . requireConwayNodeEra
-                liftHandler
-                    $ W.submitWalletScoped
-                        (tracerTxSubmit ctx)
-                        (worker ^. dbLayer)
-                        (ctx ^. networkLayer)
-                        True
-                        tx
-                        sealed
-                        expiration
+                $ withWorkerCtx
+                    ctx
+                    walletId
+                    (const $ throwDapp DappAccountChangedError)
+                    (const $ throwDapp DappContextUnavailableError)
+                $ \worker -> do
+                    liftIO (NW.currentNodeEra $ ctx ^. networkLayer)
+                        >>= either throwDapp pure . requireConwayNodeEra
+                    liftHandler
+                        $ W.submitWalletScoped
+                            (tracerTxSubmit ctx)
+                            (worker ^. dbLayer)
+                            (ctx ^. networkLayer)
+                            True
+                            tx
+                            sealed
+                            expiration
         case status of
             RejectedE -> throwDapp DappSubmissionFailedError
             ExpiredDappE -> throwDapp DappSubmissionFailedError
@@ -5975,16 +5981,16 @@ postDappSubmission ctx (ApiT walletId)
                         1
                         (ApiDappHex txBytes)
                         (toApiStatus status)
-  where
-    throwDapp = Handler . throwE . dappServerError
-    toApiStatus = \case
-        AuthorizedE -> SubmissionAuthorized
-        BroadcastingE -> SubmissionBroadcasting
-        SubmittedE -> SubmissionSubmitted
-        RejectedE -> SubmissionRejected
-        OutcomeUnknownE -> SubmissionOutcomeUnknown
-        InLedgerDappE -> SubmissionInLedger
-        ExpiredDappE -> SubmissionExpired
+      where
+        throwDapp = Handler . throwE . dappServerError
+        toApiStatus = \case
+            AuthorizedE -> SubmissionAuthorized
+            BroadcastingE -> SubmissionBroadcasting
+            SubmittedE -> SubmissionSubmitted
+            RejectedE -> SubmissionRejected
+            OutcomeUnknownE -> SubmissionOutcomeUnknown
+            InLedgerDappE -> SubmissionInLedger
+            ExpiredDappE -> SubmissionExpired
 
 postTransactionContext
     :: forall n

@@ -188,7 +188,8 @@ withBootDBLayer timeInterpreter wid params k = do
             , insertDurableSubmission = insertPureDurable durable
             , claimDurableSubmissionAttempt = claimPureDurable durable wid
             , updateDurableSubmission = updatePureDurable durable
-            , compareAndUpdateDurableSubmission = compareAndUpdatePureDurable durable
+            , compareAndUpdateDurableSubmission =
+                compareAndUpdatePureDurable durable
             , readDurableSubmissions = readPureDurable durable wid
             , atomicallyWithContextChange = \change action ->
                 withMVar lock $ \() -> do
@@ -323,15 +324,20 @@ transitionPureDurable replacement rows =
         Just prior ->
             let restoring =
                     durableStatus replacement == SubmittedE
-                        && (durableStatus (pureSubmission prior) == InLedgerDappE
-                            || isRollbackConflict (pureSubmission prior))
+                        && ( durableStatus (pureSubmission prior) == InLedgerDappE
+                                || isRollbackConflict (pureSubmission prior)
+                           )
                 restored =
                     not restoring
-                        || not (any (overlaps (pureInputs prior))
-                            (filter (not . sameRow) rows))
+                        || not
+                            ( any
+                                (overlaps (pureInputs prior))
+                                (filter (not . sameRow) rows)
+                            )
                 finalCode
                     | not restored = Just rollbackConflictCode
-                    | durableRejectionCode replacement == Just rollbackConflictCode = Nothing
+                    | durableRejectionCode replacement == Just rollbackConflictCode =
+                        Nothing
                     | otherwise = durableRejectionCode replacement
                 final =
                     replacement
@@ -344,12 +350,14 @@ transitionPureDurable replacement rows =
                     RejectedE -> False
                     ExpiredDappE -> False
                     InLedgerDappE -> False
-                    _ | restoring -> restored
-                      | otherwise -> pureClaimsActive prior
+                    _
+                        | restoring -> restored
+                        | otherwise -> pureClaimsActive prior
                 replace stored
-                    | sameRow stored = stored{pureSubmission = final, pureClaimsActive = active}
+                    | sameRow stored =
+                        stored{pureSubmission = final, pureClaimsActive = active}
                     | otherwise = stored
-            in (replace <$> rows, Just final)
+            in  (replace <$> rows, Just final)
   where
     sameRow = sameSubmission replacement . pureSubmission
 

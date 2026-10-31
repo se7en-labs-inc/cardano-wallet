@@ -197,7 +197,6 @@ isRollbackConflict DurableSubmission{durableStatus, durableRejectionCode} =
     durableStatus == OutcomeUnknownE
         && durableRejectionCode == Just rollbackConflictCode
 
-
 data DurableSubmissionInput = DurableSubmissionInput
     { durableInputTxId :: TxId
     , durableInputIndex :: Word32
@@ -361,7 +360,7 @@ updateDurableSubmission DurableSubmission{..} = do
     restored <- case durableStatus of
         SubmittedE
             | any
-                (\(Entity _ row) ->
+                ( \(Entity _ row) ->
                     dappSubmissionStatus row == InLedgerDappE
                         || dappSubmissionStatus row == OutcomeUnknownE
                             && dappSubmissionRejectionCode row

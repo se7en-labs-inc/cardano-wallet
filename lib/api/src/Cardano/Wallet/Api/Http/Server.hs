@@ -137,6 +137,7 @@ import Cardano.Wallet.Api.Http.Shelley.Server
     , postAccountPublicKey
     , postAccountWallet
     , postDappDataSignature
+    , postDappSubmission
     , postDappWitnesses
     , postExternalTransaction
     , postIcarusWallet
@@ -147,7 +148,6 @@ import Cardano.Wallet.Api.Http.Shelley.Server
     , postRandomWallet
     , postRandomWalletFromXPrv
     , postSharedWallet
-    , postDappSubmission
     , postTransactionContext
     , postTransactionFeeOld
     , postTransactionOld

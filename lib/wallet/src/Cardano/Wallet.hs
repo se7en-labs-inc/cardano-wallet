@@ -6,13 +6,13 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
@@ -476,6 +476,10 @@ import Cardano.Wallet.DB
 import Cardano.Wallet.DB.Errors
     ( ErrNoSuchWallet (..)
     )
+import Cardano.Wallet.DB.Sqlite.Types
+    ( DappSubmissionInputRole (..)
+    , DappSubmissionStatusEnum (..)
+    )
 import Cardano.Wallet.DB.Store.Delegations.Layer
     ( CurrentEpochSlotting
     , mkCurrentEpochSlotting
@@ -492,10 +496,6 @@ import Cardano.Wallet.DB.Store.Submissions.Operations
     , DurableSubmissionInput (..)
     , DurableSubmissionInsert (..)
     , isRollbackConflict
-    )
-import Cardano.Wallet.DB.Sqlite.Types
-    ( DappSubmissionInputRole (..)
-    , DappSubmissionStatusEnum (..)
     )
 import Cardano.Wallet.DB.WalletState
     ( DeltaWalletState
@@ -761,8 +761,8 @@ import Control.Monad
     , join
     , replicateM
     , unless
-    , when
     , void
+    , when
     , (<=<)
     )
 import Control.Monad.Class.MonadTime
@@ -986,13 +986,13 @@ import qualified Cardano.Crypto.Wallet as CC
 import qualified Cardano.Crypto.WalletHD.Encrypted as EncHD
     ( Signature (..)
     )
-import qualified Cardano.Wallet.DB.Sqlite.Types as Sql
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Slotting.Slot as Slot
 import qualified Cardano.Wallet.Address.Discovery.Random as Rnd
 import qualified Cardano.Wallet.Address.Discovery.Sequential as Seq
 import qualified Cardano.Wallet.Address.Discovery.Shared as Shared
 import qualified Cardano.Wallet.Balance.Migration as Migration
+import qualified Cardano.Wallet.DB.Sqlite.Types as Sql
 import qualified Cardano.Wallet.DB.Store.Delegations.Layer as Dlgs
 import qualified Cardano.Wallet.DB.Store.Submissions.Layer as Submissions
 import qualified Cardano.Wallet.DB.WalletState as WS
@@ -3837,6 +3837,7 @@ mkTxMeta latestBlockHeader txValidity amountIn amountOut =
         , amount = Coin.distance amountIn amountOut
         , expiry = Just (snd txValidity)
         }
+
 -- | Persist an exact wallet-scoped submission before making the single
 -- caller-owned network attempt. Replays are classified from the durable row;
 -- only an authorized row may be broadcast.
@@ -3845,7 +3846,8 @@ submitWalletScoped
     => Tracer m TxSubmitLog
     -> DBLayer m s
     -> NetworkLayer m block
-    -> Bool -- ^ DApp request: refuse a new broadcast outside Conway.
+    -> Bool
+    -- ^ DApp request: refuse a new broadcast outside Conway.
     -> Tx
     -> SealedTx
     -> Maybe SlotNo
@@ -3886,10 +3888,14 @@ submitWalletScoped tr DBLayer{..} nw conwayOnly tx sealed expiration = do
         else case result of
             SubmittedE -> pure result
             InLedgerDappE -> pure result
-            RejectedE -> throwE $ ErrSubmitTxNetwork $
-                ErrPostTxValidationError "This transaction was previously rejected."
-            ExpiredDappE -> throwE $ ErrSubmitTxNetwork $
-                ErrPostTxValidationError "This transaction has expired."
+            RejectedE ->
+                throwE
+                    $ ErrSubmitTxNetwork
+                    $ ErrPostTxValidationError "This transaction was previously rejected."
+            ExpiredDappE ->
+                throwE
+                    $ ErrSubmitTxNetwork
+                    $ ErrPostTxValidationError "This transaction has expired."
             _ -> throwE ErrSubmitTxOutcomeUnknown
   where
     claim role TxIn{inputId, inputIx} =
@@ -3905,16 +3911,20 @@ submitWalletScoped tr DBLayer{..} nw conwayOnly tx sealed expiration = do
         started <- lift getCurrentTime
         claimed <-
             lift $ atomicallyWithContextChange PendingContextChange $ do
-                attempt <- claimDurableSubmissionAttempt
-                    (durableTxId authorized)
-                    (durableAttemptGeneration authorized)
-                    started
+                attempt <-
+                    claimDurableSubmissionAttempt
+                        (durableTxId authorized)
+                        (durableAttemptGeneration authorized)
+                        started
                 case attempt of
                     Nothing -> Left <$> compareAndUpdateDurableSubmission authorized authorized
                     Just broadcasting -> pure $ Right broadcasting
         case claimed of
             Left current ->
-                maybe (throwE ErrSubmitTxOutcomeUnknown) (pure . durableStatus) current
+                maybe
+                    (throwE ErrSubmitTxOutcomeUnknown)
+                    (pure . durableStatus)
+                    current
             Right broadcasting -> do
                 outcome <-
                     lift
@@ -3961,10 +3971,14 @@ submitWalletScoped tr DBLayer{..} nw conwayOnly tx sealed expiration = do
             then throwE ErrSubmitTxOutcomeUnknown
             else pure actual
     complete expected replacement = do
-        current <- lift $
-            atomicallyWithContextChange PendingContextChange $
-                compareAndUpdateDurableSubmission expected replacement
-        maybe (throwE ErrSubmitTxOutcomeUnknown) (pure . durableStatus) current
+        current <-
+            lift
+                $ atomicallyWithContextChange PendingContextChange
+                $ compareAndUpdateDurableSubmission expected replacement
+        maybe
+            (throwE ErrSubmitTxOutcomeUnknown)
+            (pure . durableStatus)
+            current
     rejectionCode = \case
         ErrPostTxValidationError _ -> "validation"
         ErrPostTxMempoolFull -> "mempool_full"
@@ -3990,18 +4004,23 @@ submitTx tr db nw built@BuiltTx{builtTx, builtTxMeta, builtSealedTx} = do
             builtSealedTx
             (expiry builtTxMeta)
     when (submissionStatus == SubmittedE) $ do
-        registered <- lift $ db & \DBLayer{atomicallyWithContextChange, getTx, walletState} ->
-            atomicallyWithContextChange PendingContextChange $ do
-                existing <- getTx (txId builtTx)
-                visible <- case existing of
-                    Nothing -> do
-                        Delta.onDBVar walletState
-                            . WalletState.updateSubmissions
-                            . Delta.update
-                            $ \_ -> Submissions.addTxSubmission built (builtTxMeta ^. #slotNo)
-                        getTx (txId builtTx)
-                    Just _ -> pure existing
-                pure $ maybe False ((`elem` [Pending, InLedger]) . status . txInfoMeta) visible
+        registered <-
+            lift $ db & \DBLayer{atomicallyWithContextChange, getTx, walletState} ->
+                atomicallyWithContextChange PendingContextChange $ do
+                    existing <- getTx (txId builtTx)
+                    visible <- case existing of
+                        Nothing -> do
+                            Delta.onDBVar walletState
+                                . WalletState.updateSubmissions
+                                . Delta.update
+                                $ \_ -> Submissions.addTxSubmission built (builtTxMeta ^. #slotNo)
+                            getTx (txId builtTx)
+                        Just _ -> pure existing
+                    pure
+                        $ maybe
+                            False
+                            ((`elem` [Pending, InLedger]) . status . txInfoMeta)
+                            visible
         unless registered $ throwE ErrSubmitTxOutcomeUnknown
 
 -- | Broadcast an externally-signed transaction to the network.
@@ -4157,7 +4176,8 @@ runLocalTxSubmissionPool
     -> m ()
 runLocalTxSubmissionPool cfg ctx = do
     recoverInterruptedBroadcasts
-    watchNodeTip nw =<< rateLimited (const $ bracketTracer trBracket reconcile)
+    watchNodeTip nw
+        =<< rateLimited (const $ bracketTracer trBracket reconcile)
   where
     nw = networkLayer_ ctx
     db = dbLayer_ ctx
@@ -4168,7 +4188,8 @@ runLocalTxSubmissionPool cfg ctx = do
                 when (durableStatus row == BroadcastingE)
                     $ void
                     $ atomicallyWithContextChange PendingContextChange
-                    $ compareAndUpdateDurableSubmission row
+                    $ compareAndUpdateDurableSubmission
+                        row
                         row
                             { durableStatus = OutcomeUnknownE
                             , durableBroadcastStarted = Nothing
@@ -4183,8 +4204,9 @@ runLocalTxSubmissionPool cfg ctx = do
                             then Just <$> getTx transactionId
                             else pure Nothing
                 saveRow expected replacement =
-                    void $ atomicallyWithContextChange PendingContextChange $
-                        compareAndUpdateDurableSubmission expected replacement
+                    void
+                        $ atomicallyWithContextChange PendingContextChange
+                        $ compareAndUpdateDurableSubmission expected replacement
             forM_ rows $ \row ->
                 when
                     ( durableStatus row

@@ -471,7 +471,13 @@ withNodeNetworkLayerBase
         -- FIXME: Would be nice to remove these multiple vars.
         -- Not as trivial as it seems, since we'd need to preserve the @debounce@
         -- behaviour.
-        (readNodeTip, networkParamsVar, interpreterVar, eraVar, txSubmissionQ, txMonitorQ) <-
+        ( readNodeTip
+            , networkParamsVar
+            , interpreterVar
+            , eraVar
+            , txSubmissionQ
+            , txMonitorQ
+            ) <-
             connectNodeClient (handlers ClientNodeTip)
 
         queryRewardQ <-
@@ -609,7 +615,13 @@ withNodeNetworkLayerBase
                 =<< async
                     (connectClient trNodeTip retryHandlers ouroborosApp versionData conn)
             pure
-                (readTip, networkParamsVar, interpreterVar, eraVar, txSubmissionQ, txMonitorQ)
+                ( readTip
+                , networkParamsVar
+                , interpreterVar
+                , eraVar
+                , txSubmissionQ
+                , txMonitorQ
+                )
 
         connectDelegationRewardsClient
             :: (HasCallStack)

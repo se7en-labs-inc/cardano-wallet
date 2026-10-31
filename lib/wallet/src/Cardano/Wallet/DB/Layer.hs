@@ -80,7 +80,6 @@ import Cardano.Wallet.Checkpoints
 import Cardano.Wallet.DB
     ( ContextChange (..)
     , ContextClock (..)
-    , DBDurableSubmissions (..)
     , DBCheckpoints (..)
     , DBDurableSubmissions (..)
     , DBFactory (..)

@@ -241,15 +241,15 @@ import Cardano.Wallet.Primitive.Types.Tx
     ( SealedTx (..)
     , Tx (..)
     )
-import Cardano.Wallet.Primitive.Types.Tx.SealedTx
-    ( unsafeSealedTxFromBytes
-    )
 import Cardano.Wallet.Primitive.Types.Tx.Constraints
     ( txOutMaxCoin
     )
 import Cardano.Wallet.Primitive.Types.Tx.Gen
     ( genTx
     , shrinkTx
+    )
+import Cardano.Wallet.Primitive.Types.Tx.SealedTx
+    ( unsafeSealedTxFromBytes
     )
 import Cardano.Wallet.Primitive.Types.Tx.TransactionInfo
     ( TransactionInfo (..)
@@ -357,8 +357,8 @@ import Data.Either
     ( isLeft
     )
 import Data.Function
-    ( (&)
-    , on
+    ( on
+    , (&)
     )
 import Data.Functor.Identity
     ( Identity (..)
@@ -524,18 +524,19 @@ spec = describe "Cardano.WalletSpec" $ do
     describe "ordinary-submission-history" $ do
         let sealed = fixtureSealedTx (BS.replicate 32 7)
             tid = fixtureTxId sealed
-            tx = Tx
-                { txId = tid
-                , txCBOR = Nothing
-                , fee = Nothing
-                , resolvedInputs = []
-                , resolvedCollateralInputs = []
-                , outputs = []
-                , collateralOutput = Nothing
-                , withdrawals = mempty
-                , metadata = Nothing
-                , scriptValidity = Nothing
-                }
+            tx =
+                Tx
+                    { txId = tid
+                    , txCBOR = Nothing
+                    , fee = Nothing
+                    , resolvedInputs = []
+                    , resolvedCollateralInputs = []
+                    , outputs = []
+                    , collateralOutput = Nothing
+                    , withdrawals = mempty
+                    , metadata = Nothing
+                    , scriptValidity = Nothing
+                    }
             confirmed = TxMeta InLedger Outgoing (SlotNo 1) (Quantity 1) (Coin 0) Nothing
             pending = TxMeta Pending Outgoing (SlotNo 0) (Quantity 0) (Coin 0) Nothing
             built = BuiltTx tx pending sealed
@@ -544,32 +545,47 @@ spec = describe "Cardano.WalletSpec" $ do
             let network = dummyNetworkLayer{postSealedTxOneShot = \_ -> pure ()}
             unsafeRunExceptT $ submitTx nullTracer db network built
             db & \DBLayer{atomically, readTransactions, getTx} -> do
-                selected <- atomically $
-                    readTransactions Nothing Descending Range.everything
-                        (Just Pending) Nothing Nothing
+                selected <-
+                    atomically
+                        $ readTransactions
+                            Nothing
+                            Descending
+                            Range.everything
+                            (Just Pending)
+                            Nothing
+                            Nothing
                 map (\info -> (txInfoId info, status $ txInfoMeta info)) selected
                     `shouldBe` [(tid, Pending)]
                 visible <- atomically $ getTx tid
                 fmap txInfoId visible `shouldBe` Just tid
         it "does not replace confirmation discovered during the node attempt" $ do
             WalletLayerFixture db _ _ <- setupFixture dummyStateF testWallet
-            let network = dummyNetworkLayer
-                    { postSealedTxOneShot = \_ -> liftIO $
-                        db & \DBLayer{atomically, putTxHistory, readDurableSubmissions, updateDurableSubmission} ->
-                            atomically $ do
-                                rows <- readDurableSubmissions
-                                row <- case rows of
-                                    [submission] -> pure submission
-                                    _ -> error "expected one broadcasting submission"
-                                updateDurableSubmission row
-                                    { durableAuthorized = False
-                                    , durableStatus = InLedgerDappE
-                                    , durableAcceptance = Just (SlotNo 1)
-                                    }
-                                putTxHistory [(tx, confirmed)]
-                    }
-            unsafeRunExceptT $
-                submitTx nullTracer db network built
+            let network =
+                    dummyNetworkLayer
+                        { postSealedTxOneShot = \_ ->
+                            liftIO
+                                $ db
+                                & \DBLayer
+                                    { atomically
+                                    , putTxHistory
+                                    , readDurableSubmissions
+                                    , updateDurableSubmission
+                                    } ->
+                                        atomically $ do
+                                            rows <- readDurableSubmissions
+                                            row <- case rows of
+                                                [submission] -> pure submission
+                                                _ -> error "expected one broadcasting submission"
+                                            updateDurableSubmission
+                                                row
+                                                    { durableAuthorized = False
+                                                    , durableStatus = InLedgerDappE
+                                                    , durableAcceptance = Just (SlotNo 1)
+                                                    }
+                                            putTxHistory [(tx, confirmed)]
+                        }
+            unsafeRunExceptT
+                $ submitTx nullTracer db network built
             db & \DBLayer{atomically, getTx, readDurableSubmissions} -> do
                 result <- atomically $ getTx tid
                 fmap txInfoMeta result `shouldBe` Just confirmed
@@ -578,30 +594,42 @@ spec = describe "Cardano.WalletSpec" $ do
         it "refuses a rejected exact replay without another network attempt" $ do
             WalletLayerFixture db _ _ <- setupFixture dummyStateF testWallet
             calls <- newIORef (0 :: Int)
-            let network = dummyNetworkLayer
-                    { postSealedTxOneShot = \_ -> do
-                        liftIO $ modifyIORef' calls (+ 1)
-                        throwE $ W.ErrPostTxValidationError "refused by node"
-                    }
+            let network =
+                    dummyNetworkLayer
+                        { postSealedTxOneShot = \_ -> do
+                            liftIO $ modifyIORef' calls (+ 1)
+                            throwE $ W.ErrPostTxValidationError "refused by node"
+                        }
             first <- runExceptT $ submitTx nullTracer db network built
             replay <- runExceptT $ submitTx nullTracer db network built
-            first `shouldBe` Left (W.ErrSubmitTxNetwork $
-                W.ErrPostTxValidationError "refused by node")
-            replay `shouldBe` Left (W.ErrSubmitTxNetwork $
-                W.ErrPostTxValidationError "This transaction was previously rejected.")
+            first
+                `shouldBe` Left
+                    ( W.ErrSubmitTxNetwork
+                        $ W.ErrPostTxValidationError "refused by node"
+                    )
+            replay
+                `shouldBe` Left
+                    ( W.ErrSubmitTxNetwork
+                        $ W.ErrPostTxValidationError "This transaction was previously rejected."
+                    )
             readIORef calls `shouldReturn` 1
             db & \DBLayer{atomically, getTx} ->
                 atomically (getTx tid) `shouldReturn` Nothing
-        it "reports uncertainty when expiry crosses before pending registration" $ do
-            WalletLayerFixture db _ _ <- setupFixture dummyStateF testWallet
-            let expiring = built{builtTxMeta = pending{expiry = Just (SlotNo 1)}}
-                network = dummyNetworkLayer
-                    { postSealedTxOneShot = \_ -> liftIO $
-                        db & \DBLayer{atomically, rollForwardTxSubmissions} ->
-                            atomically $ rollForwardTxSubmissions (SlotNo 1) []
-                    }
-            result <- runExceptT $ submitTx nullTracer db network expiring
-            result `shouldBe` Left W.ErrSubmitTxOutcomeUnknown
+        it
+            "reports uncertainty when expiry crosses before pending registration"
+            $ do
+                WalletLayerFixture db _ _ <- setupFixture dummyStateF testWallet
+                let expiring = built{builtTxMeta = pending{expiry = Just (SlotNo 1)}}
+                    network =
+                        dummyNetworkLayer
+                            { postSealedTxOneShot = \_ ->
+                                liftIO
+                                    $ db
+                                    & \DBLayer{atomically, rollForwardTxSubmissions} ->
+                                        atomically $ rollForwardTxSubmissions (SlotNo 1) []
+                            }
+                result <- runExceptT $ submitTx nullTracer db network expiring
+                result `shouldBe` Left W.ErrSubmitTxOutcomeUnknown
         it "does not accept an expired pool record as a pending replay" $ do
             WalletLayerFixture db _ _ <- setupFixture dummyStateF testWallet
             let expiring = built{builtTxMeta = pending{expiry = Just (SlotNo 1)}}
@@ -1816,7 +1844,6 @@ prop_localTxSubmission tc = monadicIO $ do
     -- The pool is reconciliation-only: only the explicit calls above may post.
     assert' "pool never submits pending transactions"
         $ length (resSubmittedTxs res) == length (retryTestPool tc)
-
   where
     assert' :: String -> Bool -> PropertyM IO ()
     assert' _msg True = return ()
@@ -2439,8 +2466,10 @@ dummyIcarusTransactionLayer =
 -- Typed, decodable Conway envelopes with distinct auxiliary hashes.
 fixtureSealedTx :: HasCallStack => ByteString -> SealedTx
 fixtureSealedTx nonce =
-    unsafeSealedTxFromBytes $ CBOR.toStrictByteString $ CBOR.encodeTerm $
-        CBOR.TList
+    unsafeSealedTxFromBytes
+        $ CBOR.toStrictByteString
+        $ CBOR.encodeTerm
+        $ CBOR.TList
             [ CBOR.TMap
                 [ (CBOR.TInt 0, CBOR.TList [])
                 , (CBOR.TInt 1, CBOR.TList [])

@@ -286,21 +286,19 @@ assertEndpointError request' status code expected response
     isDappBackend req = case pathInfo req of
         "v2" : "wallets" : _walletId : route : _
             | route
-                `elem`
-                    [ "transaction-context"
-                    , "transaction-witnesses"
-                    , "data-signatures"
-                    , "cip95-key-state"
-                    ] ->
+                `elem` [ "transaction-context"
+                       , "transaction-witnesses"
+                       , "data-signatures"
+                       , "cip95-key-state"
+                       ] ->
                 True
         "wallets" : _walletId : route : _
             | route
-                `elem`
-                    [ "transaction-context"
-                    , "transaction-witnesses"
-                    , "data-signatures"
-                    , "cip95-key-state"
-                    ] ->
+                `elem` [ "transaction-context"
+                       , "transaction-witnesses"
+                       , "data-signatures"
+                       , "cip95-key-state"
+                       ] ->
                 True
         _ -> False
 

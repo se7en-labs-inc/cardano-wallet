@@ -249,9 +249,9 @@ import Cardano.Wallet.Api.Types.BlockHeader
     ( ApiBlockHeader
     )
 import Cardano.Wallet.Api.Types.Dapp.Context
-    ( ApiDappDataSignRequest
+    ( ApiDappCip95KeyState
+    , ApiDappDataSignRequest
     , ApiDappDataSignResponse
-    , ApiDappCip95KeyState
     , ApiDappTransactionContextRequest
     , ApiDappTransactionContextResponse
     , ApiDappWitnessSignRequest

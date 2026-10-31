@@ -43,9 +43,9 @@ import Cardano.Wallet.Api.Types
     , WalletPutPassphraseData
     )
 import Cardano.Wallet.Api.Types.Dapp.Context
-    ( ApiDappDataSignRequest
+    ( ApiDappCip95KeyState
+    , ApiDappDataSignRequest
     , ApiDappDataSignResponse
-    , ApiDappCip95KeyState
     , ApiDappTransactionContextRequest
     , ApiDappTransactionContextResponse
     , ApiDappWitnessSignRequest

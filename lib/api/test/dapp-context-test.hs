@@ -154,6 +154,7 @@ import Cardano.Wallet.Unsafe
     )
 import Control.Monad
     ( forM_
+    , void
     )
 import Data.ByteString
     ( ByteString
@@ -556,14 +557,14 @@ main = hspec $ do
                     , True
                     )
                 ]
-            fmap (const ()) (decodeDappTx $ ApiDappHex acceptedTransaction)
+            void (decodeDappTx $ ApiDappHex acceptedTransaction)
                 `shouldBe` Right ()
-            fmap (const ()) (decodeDappTx $ ApiDappHex rejectedTransaction)
+            void (decodeDappTx $ ApiDappHex rejectedTransaction)
                 `shouldBe` Left InvalidDappRequest
         it "classifies legacy Genesis and MIR certificates as deprecated"
             $ mapM_
                 ( \transaction ->
-                    fmap (const ()) (decodeDappTx $ ApiDappHex transaction)
+                    void (decodeDappTx $ ApiDappHex transaction)
                         `shouldBe` Left DappDeprecatedCertificateError
                 )
                 [legacyGenesisTransaction, legacyMirTransaction]

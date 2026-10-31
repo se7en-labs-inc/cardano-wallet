@@ -2633,8 +2633,8 @@ dappCip95KeyState
     -> (ByteString, [ByteString], [ByteString])
 dappCip95KeyState walletState confirmed pending =
     ( drepPublicKey
-    , if registered then [stakePublicKey] else []
-    , if registered then [] else [stakePublicKey]
+    , [stakePublicKey | registered]
+    , [stakePublicKey | not registered]
     )
   where
     stakePublicKey =

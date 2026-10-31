@@ -1101,7 +1101,7 @@ dappCip95PublicKeys = do
     map
         getDerivationIndex
         (NE.toList $ drepDerivationPath $ derivationPrefix walletState)
-        `shouldBe` [0x8000073c, 0x80000717, 0x80000000, 3, 0]
+        `shouldBe` [0x8000_073c, 0x8000_0717, 0x8000_0000, 3, 0]
 
 -- | A fixed (WalletId, WalletName, DummyState) used by the migration tests.
 testWallet :: (WalletId, WalletName, DummyState)

@@ -3199,13 +3199,13 @@ prop_dappDRepVKeyWitnessesMatch xprvKey encPwd = ioProperty $ withFastKdfForTest
         rootKey =
             liftRawKey ShelleyKeyS
                 $ CC.xPrvChangePass encPwd encryptionPwd (getRawKey ShelleyKeyS xprvKey)
-        drepPath = [0x8000073c, 0x80000717, 0x80000000, 3, 0]
+        drepPath = [0x8000_073c, 0x8000_0717, 0x8000_0000, 3, 0]
         accountKey =
             Shelley.deriveAccountPrivateKeyShelley
-                (Index 0x8000073c)
+                (Index 0x8000_073c)
                 encryptionPwd
                 (getRawKey ShelleyKeyS rootKey)
-                (Index 0x80000000)
+                (Index 0x8000_0000)
         drepKey = Shelley.deriveDRepPrivateKey encryptionPwd accountKey
         drepCredential = blake2b224 $ xpubPublicKey $ toXPub drepKey
         rawXprv =
@@ -3275,7 +3275,7 @@ prop_dappDataSignsExactBytes xprvKey encPwd = ioProperty $ withFastKdfForTesting
             liftRawKey ShelleyKeyS
                 $ CC.xPrvChangePass encPwd encryptionPwd (getRawKey ShelleyKeyS xprvKey)
         paymentPath = [0x8000_073c, 0x8000_0717, 0x8000_0000, 0, 0]
-        drepPath = [0x8000073c, 0x80000717, 0x80000000, 3, 0]
+        drepPath = [0x8000_073c, 0x8000_0717, 0x8000_0000, 3, 0]
         accountKey =
             Shelley.deriveAccountPrivateKeyShelley
                 (Index 0x8000_073c)

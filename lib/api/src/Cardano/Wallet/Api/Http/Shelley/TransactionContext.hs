@@ -1362,9 +1362,7 @@ stakeEvidence discovery = concatMap transactionEvidence
       where
         Withdrawals withdrawals = ledgerTx ^. bodyTxL . withdrawalsTxBodyL
     certificateEvidence ledgerTx =
-        concatMap certificateOwnership
-            $ toList
-            $ ledgerTx ^. bodyTxL . certsTxBodyL
+        concatMap certificateOwnership (ledgerTx ^. bodyTxL . certsTxBodyL)
     certificateOwnership certificate@ConwayTxCertDeleg{} =
         stakeCertificateEvidence certificate
     certificateOwnership certificate =

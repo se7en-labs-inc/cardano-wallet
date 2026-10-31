@@ -1045,6 +1045,7 @@ import qualified Cardano.Wallet.Registry as Registry
 import qualified Codec.CBOR.Encoding as CBOR
 import qualified Codec.CBOR.Write as CBOR
 import qualified Control.Concurrent.Concierge as Concierge
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteArray as BA
 import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as BS
@@ -1056,9 +1057,8 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
-import qualified Data.Aeson as Aeson
-import qualified Data.Text.Encoding as TE
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import qualified Network.Ntp as Ntp
 
 {-------------------------------------------------------------------------------
@@ -2328,8 +2328,10 @@ selectCoins ctx@ApiLayer{..} argGenChange (ApiT walletId) body = do
                     { txWithdrawal = withdrawal
                     , txMetadata = getApiT <$> body ^. #metadata
                     , txDeposit = Just $ W.getStakeKeyDeposit pp
-                    , txPreferredCollateral = Set.fromList $ map getApiT $
-                        fromMaybe [] (body ^. #preferredCollateral)
+                    , txPreferredCollateral =
+                        Set.fromList
+                            $ map getApiT
+                            $ fromMaybe [] (body ^. #preferredCollateral)
                     }
 
         (tx, walletState) <-
@@ -2431,7 +2433,8 @@ selectCoinsForQuit
 selectCoinsForQuit ctx (ApiT walletId) preferredCollateral = do
     withWorkerCtx ctx walletId liftE liftE $ \workerCtx -> liftIO $ do
         W.CoinSelection{..} <-
-            IODeleg.selectCoinsForQuit workerCtx
+            IODeleg.selectCoinsForQuit
+                workerCtx
                 (Set.fromList $ map getApiT $ fromMaybe [] preferredCollateral)
         pure
             ApiCoinSelection
@@ -2740,8 +2743,10 @@ postTransactionOld ctx@ApiLayer{..} argGenChange (ApiT wid) body = do
                     { txWithdrawal = wdrl
                     , txMetadata = md
                     , txValidityInterval = (Nothing, ttl)
-                    , txPreferredCollateral = Set.fromList $ map getApiT $
-                        fromMaybe [] (body ^. #preferredCollateral)
+                    , txPreferredCollateral =
+                        Set.fromList
+                            $ map getApiT
+                            $ fromMaybe [] (body ^. #preferredCollateral)
                     }
         (BuiltTx{..}, txTime) <-
             atomicallyWithHandler
@@ -2965,8 +2970,10 @@ postTransactionFeeOld ctx@ApiLayer{..} (ApiT walletId) body = do
                                 . traverse
                                 . #txMetadataWithSchema_metadata
                         , txValidityInterval = (Nothing, ttl)
-                        , txPreferredCollateral = Set.fromList $ map getApiT $
-                            fromMaybe [] (body ^. #preferredCollateral)
+                        , txPreferredCollateral =
+                            Set.fromList
+                                $ map getApiT
+                                $ fromMaybe [] (body ^. #preferredCollateral)
                         }
                     PreSelection{outputs}
         pure
@@ -3102,8 +3109,10 @@ constructTransaction api knownPools poolStatus apiWalletId body = do
                     , txDeposit = Just $ W.getStakeKeyDeposit pp
                     , txMetadata = metadata
                     , txValidityInterval = first Just validityInterval
-                    , txPreferredCollateral = Set.fromList $ map getApiT $
-                        fromMaybe [] (body ^. #preferredCollateral)
+                    , txPreferredCollateral =
+                        Set.fromList
+                            $ map getApiT
+                            $ fromMaybe [] (body ^. #preferredCollateral)
                     }
 
         let transactionCtx1 =
@@ -3747,7 +3756,10 @@ constructSharedTransaction
                                 wrk
                                 pp
                                 timeTranslation
-                                (Set.fromList $ map getApiT $ fromMaybe [] (body ^. #preferredCollateral))
+                                ( Set.fromList
+                                    $ map getApiT
+                                    $ fromMaybe [] (body ^. #preferredCollateral)
+                                )
                                 Write.PartialTx
                                     { tx = unbalancedTx
                                     , extraUTxO = mempty
@@ -4487,7 +4499,10 @@ joinStakePool
                         poolId
                         poolStatus
                         (coerce $ getApiT $ body ^. #passphrase)
-                        (Set.fromList $ map getApiT $ fromMaybe [] (body ^. #preferredCollateral))
+                        ( Set.fromList
+                            $ map getApiT
+                            $ fromMaybe [] (body ^. #preferredCollateral)
+                        )
             mkApiTransaction
                 ti
                 wrk
@@ -4799,8 +4814,10 @@ delegationFee ctx@ApiLayer{..} (ApiT walletId) preferredCollateral = do
     preferred <- case preferredCollateral of
         Nothing -> pure Set.empty
         Just encoded -> case Aeson.eitherDecodeStrict' (TE.encodeUtf8 encoded) of
-            Left _ -> Handler $ throwE $
-                apiError err400 BadRequest "Invalid preferred_collateral inputs"
+            Left _ ->
+                Handler
+                    $ throwE
+                    $ apiError err400 BadRequest "Invalid preferred_collateral inputs"
             Right inputs -> pure $ Set.fromList $ map (getApiT :: ApiT TxIn -> TxIn) inputs
     withWorkerCtx ctx walletId liftE liftE $ \workerCtx -> liftIO $ do
         W.DelegationFee{feePercentiles, deposit} <-
@@ -4834,7 +4851,10 @@ quitStakePool ctx@ApiLayer{..} (ApiT walletId) body = do
                     wrk
                     walletId
                     (coerce $ getApiT $ body ^. #passphrase)
-                    (Set.fromList $ map getApiT $ fromMaybe [] (body ^. #preferredCollateral))
+                    ( Set.fromList
+                        $ map getApiT
+                        $ fromMaybe [] (body ^. #preferredCollateral)
+                    )
 
         mkApiTransaction
             ti

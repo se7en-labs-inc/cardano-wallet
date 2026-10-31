@@ -2880,8 +2880,8 @@ balanceTx wrk pp timeTranslation preferredCollateral partialTx = do
                     & over #stakeKeyDeposits (lookedUpDeposits <>)
                 )
     (tx, _changeState') <-
-        throwBalanceTxErr $
-            balance utxoIndex `catchE` \err ->
+        throwBalanceTxErr
+            $ balance utxoIndex `catchE` \err ->
                 maybe (throwE err) balance fallback
 
     return tx
@@ -3476,8 +3476,8 @@ buildTransactionPure
                             , timelockKeyWitnessCounts = mempty
                             , stakeKeyDeposits = Write.StakeKeyDepositAssumeCurrent
                             }
-            withExceptT Left $
-                balance utxoIndex `catchE` \err ->
+            withExceptT Left
+                $ balance utxoIndex `catchE` \err ->
                     maybe (throwE err) balance fallback
 
 -- HACK: 'mkUnsignedTransaction' takes a reward account 'XPub' even when the
@@ -4569,7 +4569,9 @@ transactionFee
                 $ readDBVar walletState
                 <&> WalletState.getLatest
         let (primaryIndex, fallback) =
-                collateralSelectionIndexes (txPreferredCollateral txCtx) (availableUTxO mempty wallet)
+                collateralSelectionIndexes
+                    (txPreferredCollateral txCtx)
+                    (availableUTxO mempty wallet)
         utxoIndex <-
             -- Important:
             --
@@ -4655,9 +4657,10 @@ transactionFee
                     (getState wallet)
                     ptx
         wrapErrBalanceTx $ calculateFeePercentiles $ do
-            res <- runExceptT $
-                balance utxoIndex `catchE` \err ->
-                    maybe (throwE err) balance fallback
+            res <-
+                runExceptT
+                    $ balance utxoIndex `catchE` \err ->
+                        maybe (throwE err) balance fallback
             case fst <$> res of
                 Right tx ->
                     pure $ Fee $ Convert.toWallet $ tx ^. bodyTxL . feeTxBodyL

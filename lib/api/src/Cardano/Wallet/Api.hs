@@ -321,9 +321,6 @@ import Control.Tracer
 import Data.ByteString
     ( ByteString
     )
-import Data.Text
-    ( Text
-    )
 import Data.Generics.Internal.VL.Lens
     ( Lens'
     )
@@ -339,6 +336,9 @@ import Data.Kind
     )
 import Data.List.NonEmpty
     ( NonEmpty
+    )
+import Data.Text
+    ( Text
     )
 import GHC.Generics
     ( Generic

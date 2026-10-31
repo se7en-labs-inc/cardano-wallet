@@ -184,8 +184,9 @@ spec = describe "SHELLEY_COIN_SELECTION" $ do
                         (`shouldBe` Nothing)
                     ]
 
-    it "PREFERRED_COLLATERAL - preserve when possible, spend when necessary" $
-        \ctx -> runResourceT $ do
+    it
+        "PREFERRED_COLLATERAL - preserve when possible, spend when necessary"
+        $ \ctx -> runResourceT $ do
             source <- fixtureWallet ctx
             target <- emptyWallet ctx
             addr : _ <- fmap (view #id) <$> listAddresses @n ctx target
@@ -198,14 +199,18 @@ spec = describe "SHELLEY_COIN_SELECTION" $ do
                 txid = chosen ^. #id
                 index = chosen ^. #index
                 preserve =
-                    addField "preferred_collateral"
+                    addField
+                        "preferred_collateral"
                         [json|[{"id": #{txid}, "index": #{index}}]|]
             selectCoinsWith @_ @'Shelley ctx source (payment :| []) preserve
-                >>= flip verify
+                >>= flip
+                    verify
                     [ expectResponseCode HTTP.status200
-                    , expectField #inputs
+                    , expectField
+                        #inputs
                         (`shouldSatisfy` all ((/= identity chosen) . identity))
-                    , expectField #outputs
+                    , expectField
+                        #outputs
                         (`shouldBe` [ApiCoinSelectionOutput addr amount mempty])
                     ]
             let available = source ^. #balance . #available . #toNatural
@@ -213,11 +218,14 @@ spec = describe "SHELLEY_COIN_SELECTION" $ do
                     ApiAmount $ available - 5 * minUTxOValue (_mainEra ctx)
                 largePayment = AddressAmount addr largeAmount mempty
             selectCoinsWith @_ @'Shelley ctx source (largePayment :| []) preserve
-                >>= flip verify
+                >>= flip
+                    verify
                     [ expectResponseCode HTTP.status200
-                    , expectField #inputs
+                    , expectField
+                        #inputs
                         (`shouldSatisfy` any ((== identity chosen) . identity))
-                    , expectField #outputs
+                    , expectField
+                        #outputs
                         (`shouldBe` [ApiCoinSelectionOutput addr largeAmount mempty])
                     ]
 

@@ -3224,13 +3224,13 @@ prop_dappDataSignsExactBytes xprvKey encPwd = ioProperty $ withFastKdfForTesting
         rootKey =
             liftRawKey ShelleyKeyS
                 $ CC.xPrvChangePass encPwd encryptionPwd (getRawKey ShelleyKeyS xprvKey)
-        path = [0x8000073c, 0x80000717, 0x80000000, 0, 0]
+        path = [0x8000_073c, 0x8000_0717, 0x8000_0000, 0, 0]
         accountKey =
             Shelley.deriveAccountPrivateKeyShelley
-                (Index 0x8000073c)
+                (Index 0x8000_073c)
                 encryptionPwd
                 (getRawKey ShelleyKeyS rootKey)
-                (Index 0x80000000)
+                (Index 0x8000_0000)
         addressKey =
             Shelley.deriveAddressPrivateKeyShelley
                 encryptionPwd

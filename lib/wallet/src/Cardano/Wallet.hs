@@ -2622,11 +2622,11 @@ signDappData root userPwd path expectedHash message = do
                         then pure $ Right $ Left "candidate key hash mismatch"
                         else
                             fmap
-                                ( fmap $ \case
+                                ( \case
                                     EncHD.Signature signature -> Right (public, signature)
                                 )
-                                $ signWithExtKeyMaterial material message
-            pure $ first show signed >>= id
+                                <$> signWithExtKeyMaterial material message
+            pure $ join (first show signed)
     pure $ result >>= verifyResult
   where
     signV1 rootKey encryptionPwd = do
@@ -2680,8 +2680,10 @@ signDappData root userPwd path expectedHash message = do
             Left "invalid data signature length"
         | otherwise = do
             vkey <-
-                maybe (Left "invalid data public key") Right
-                    $ (rawDecodeFixedSized public :: Maybe (VerKeyDSIGN DSIGN))
+                maybe
+                    (Left "invalid data public key")
+                    Right
+                    (rawDecodeFixedSized public :: Maybe (VerKeyDSIGN DSIGN))
             sig <-
                 maybe (Left "invalid data signature") Right
                     $ rawDecodeFixedSized signature

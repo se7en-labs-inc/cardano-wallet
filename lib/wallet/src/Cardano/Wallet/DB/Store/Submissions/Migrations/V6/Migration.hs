@@ -40,6 +40,9 @@ import Control.Monad
 import Control.Monad.Reader
     ( ReaderT (..)
     )
+import Data.Char
+    ( isDigit
+    )
 import Data.Text
     ( Text
     )
@@ -166,7 +169,7 @@ sqlHex value
         error "non-hexadecimal persisted identifier in V6 migration"
   where
     isHex c =
-        ('0' <= c && c <= '9')
+        isDigit c
             || ('a' <= c && c <= 'f')
             || ('A' <= c && c <= 'F')
 

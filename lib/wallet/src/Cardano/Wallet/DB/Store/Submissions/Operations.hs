@@ -233,7 +233,7 @@ insertOrClassifyDurableSubmission submission@DurableSubmission{..} inputs = do
             | length requestedInputs /= length (nub requestedInputs) ->
                 pure DurableSubmissionInputConflict
             | otherwise -> do
-                claimed <- fmap concat $ mapM claimOwners claims
+                claimed <- concat <$> mapM claimOwners claims
                 if null claimed
                     then do
                         _ <-
@@ -363,7 +363,7 @@ restoreDurableSubmissionClaims
     :: WalletId -> TxId -> SqlPersistT IO Bool
 restoreDurableSubmissionClaims walletId txId = do
     claims <- readDurableInputs walletId txId
-    owners <- fmap concat $ mapM activeOwners claims
+    owners <- concat <$> mapM activeOwners claims
     if null owners
         then do
             updateWhere

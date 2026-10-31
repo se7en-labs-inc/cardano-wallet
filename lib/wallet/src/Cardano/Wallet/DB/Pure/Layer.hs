@@ -304,7 +304,7 @@ normalizeInputs =
 overlaps :: [DurableSubmissionInput] -> PureDurableSubmission -> Bool
 overlaps requested PureDurableSubmission{pureInputs, pureClaimsActive} =
     pureClaimsActive
-        && any (`Map.member` claimed) (inputKey <$> requested)
+        && any ((`Map.member` claimed) . inputKey) requested
   where
     claimed :: Map (TxId, Word32) ()
     claimed = Map.fromList $ (\input -> (inputKey input, ())) <$> pureInputs

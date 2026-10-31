@@ -769,7 +769,8 @@ walletContextBench reporter enlarged dbDir exhaustion queries mnemonic = do
                 (ApiDappHex genesisBytes)
         mkRequest bytes =
             ApiDappTransactionContextRequest 1 network (ApiDappHex <$> bytes)
-        ordinary = ordinaryContextTx (head addresses) <$> fundedInputs
+        ordinary =
+            ordinaryContextTx (expectFirst "addresses" addresses) <$> fundedInputs
         fingerprint name bytes = liftIO $ do
             let json = BL.toStrict $ encode $ mkRequest bytes
                 digest = BL.toStrict $ encode $ ApiDappHex $ blake2b256 json
@@ -838,7 +839,7 @@ walletContextBench reporter enlarged dbDir exhaustion queries mnemonic = do
                 $ putStrLn
                     "context genesis: enlarged maxTxSize=131072 maxBlockBodySize=1048576"
             let large =
-                    [ exactContextTx n (head addresses) input 65_536
+                    [ exactContextTx n (expectFirst "addresses" addresses) input 65_536
                     | (n, input) <- zip [0 ..] fundedInputs
                     ]
             fingerprint "exact-65536-50" large
@@ -867,7 +868,7 @@ walletContextBench reporter enlarged dbDir exhaustion queries mnemonic = do
                 many =
                     [ exactFromContextTx
                         n
-                        (manyContextTx (head manyAddresses) group)
+                        (manyContextTx (expectFirst "manyAddresses" manyAddresses) group)
                         65_536
                     | (n, group) <- zip [0 ..] groups
                     ]
@@ -897,9 +898,10 @@ walletContextBench reporter enlarged dbDir exhaustion queries mnemonic = do
                     pureValidatePhase "exact-65536-many-50" (mkRequest many)
                         $ clientFor manyWallet many
             cancelContextScene queries (clientFor manyWallet many)
-            contextRecovery "after-cancel" $ clientFor manyWallet [head many]
+            contextRecovery "after-cancel"
+                $ clientFor manyWallet [expectFirst "many" many]
             boundaryBeforeQuery queries "bytes-65537"
-                $ client [BS.snoc (head large) 0]
+                $ client [BS.snoc (expectFirst "large" large) 0]
         else do
             liftIO $ putStrLn "context genesis: standard generated limits"
             contextScene reporter "empty" [w] $ client []
@@ -950,7 +952,7 @@ walletContextBench reporter enlarged dbDir exhaustion queries mnemonic = do
                 dbDir
                 w
                 network
-                (head addresses)
+                (expectFirst "addresses" addresses)
                 allInputs
                 client
             boundaryBeforeQuery queries "count-51"
@@ -1802,7 +1804,7 @@ pendingContextScene reporter dbDir wallet network destination inputs client = do
             either (error . show) Prelude.id
                 $ deserializeTxWithOutputBytes @Conway
                 $ BL.fromStrict
-                $ head signed
+                $ expectFirst "signed" signed
         parentId =
             ReadHash.hashToBytes
                 $ Read.hashFromTxId
@@ -2215,6 +2217,12 @@ runScenario reporter scenario = lift . runResourceT $ do
     pend
         $ sceneOfClientMR "postMRigration"
         $ C.migrate maWalletToMigrateId migrationPayload
+
+-- | The first element of a list the benchmark set up as non-empty; fails
+-- the benchmark with the list's name otherwise.
+expectFirst :: String -> [a] -> a
+expectFirst _ (x : _) = x
+expectFirst name [] = error $ "context benchmark: " <> name <> " is empty"
 
 fmtResult :: String -> [NominalDiffTime] -> BenchM ()
 fmtResult title ts = liftIO $ Measure.fmtResult title ts

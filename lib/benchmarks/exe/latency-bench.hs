@@ -691,6 +691,7 @@ withShelleyServer tracers action = withFaucet $ \faucetClientEnv -> do
                 Context
                     { _manager = (baseUrl, manager)
                     , _walletPort = Port . fromIntegral $ portFromURL baseUrl
+                    , _nodeSocketPath = error "nodeSocketPath not available"
                     , _faucet = faucet
                     , _networkParameters = np
                     , _testnetMagic = testnetMagic

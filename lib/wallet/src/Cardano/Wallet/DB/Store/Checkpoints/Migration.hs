@@ -5,6 +5,7 @@
 
 module Cardano.Wallet.DB.Store.Checkpoints.Migration
     ( migratePrologue
+    , migrateSingleAddressMode
     ) where
 
 import Cardano.DB.Sqlite
@@ -27,6 +28,9 @@ import Cardano.Wallet.DB.Sqlite.Migration.Old
     )
 import Cardano.Wallet.DB.Sqlite.Schema
     ( EntityField (..)
+    )
+import Control.Exception
+    ( onException
     )
 import Control.Monad
     ( void
@@ -58,6 +62,28 @@ migratePrologue = mkMigration $ ReaderT $ \db -> void $ do
         defaultVal
   where
     defaultVal = "increasing"
+
+migrateSingleAddressMode :: Migration (ReadDBHandle IO) 6 7
+migrateSingleAddressMode = mkMigration $ ReaderT $ \db -> do
+    let conn = dbConn db
+    execute conn "BEGIN IMMEDIATE"
+    let migration = do
+            isFieldPresent conn (DBField SeqStateChangeAddrMode) >>= \case
+                TableMissing -> pure ()
+                ColumnMissing ->
+                    fail "Expected seq_state.change_addr_mode to exist."
+                ColumnPresent ->
+                    execute
+                        conn
+                        "UPDATE seq_state \
+                        \SET change_addr_mode = 'single_receiving' \
+                        \WHERE derivation_prefix = '2147485500/2147485463/2147483648' \
+                        \AND change_addr_mode IN ('single', 'increasing')"
+            execute
+                conn
+                "UPDATE database_schema_version SET version = 7 WHERE name = 'schema'"
+            execute conn "COMMIT"
+    migration `onException` execute conn "ROLLBACK"
 
 headerFail :: Text
 headerFail = "Database migration from version 3 to version 4 failed:"
@@ -106,3 +132,9 @@ addColumnIfMissing conn notNull field value = do
                     , tableName field
                     , "to not exist."
                     ]
+
+execute :: Sqlite.Connection -> Text -> IO ()
+execute conn sql = do
+    statement <- Sqlite.prepare conn sql
+    void $ Sqlite.step statement
+    Sqlite.finalize statement

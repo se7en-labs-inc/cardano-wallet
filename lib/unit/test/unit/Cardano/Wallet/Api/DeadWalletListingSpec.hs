@@ -452,6 +452,8 @@ withDeadWallet (Wallet wf tl ps) action =
                             registry
                             locks
                             tokenMetadata
+                            (BS.replicate 16 1)
+                            (BS.replicate 32 2)
                 pure
                     Fixture
                         { ctx = api

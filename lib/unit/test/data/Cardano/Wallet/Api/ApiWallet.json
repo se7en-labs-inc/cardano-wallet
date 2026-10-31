@@ -8,15 +8,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 9088337467924487,
+                    "quantity": 26984298181786285,
                     "unit": "lovelace"
                 },
                 "reward": {
-                    "quantity": 8619031224348391,
+                    "quantity": 16571877759211768,
                     "unit": "lovelace"
                 },
                 "total": {
-                    "quantity": 45000000000000000,
+                    "quantity": 0,
                     "unit": "lovelace"
                 }
             },
@@ -36,6 +36,7 @@
                 "encryption_method": "scrypt",
                 "last_updated_at": "1895-08-08T20:00:00Z"
             },
+            "single_address_mode": false,
             "state": {
                 "status": "ready"
             },
@@ -58,15 +59,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 7226277546049976,
-                    "unit": "lovelace"
-                },
-                "reward": {
                     "quantity": 45000000000000000,
                     "unit": "lovelace"
                 },
+                "reward": {
+                    "quantity": 38742587347966785,
+                    "unit": "lovelace"
+                },
                 "total": {
-                    "quantity": 28654760150892155,
+                    "quantity": 34129984778756902,
                     "unit": "lovelace"
                 }
             },
@@ -92,6 +93,7 @@
                 "encryption_method": "pbkdf2-hmac-sha512",
                 "last_updated_at": "1880-08-07T01:13:12.365195302218Z"
             },
+            "single_address_mode": true,
             "state": {
                 "status": "not_responding"
             },
@@ -114,15 +116,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 45000000000000000,
+                    "quantity": 0,
                     "unit": "lovelace"
                 },
                 "reward": {
-                    "quantity": 2188893792927598,
+                    "quantity": 0,
                     "unit": "lovelace"
                 },
                 "total": {
-                    "quantity": 0,
+                    "quantity": 30527079521588409,
                     "unit": "lovelace"
                 }
             },
@@ -138,6 +140,7 @@
                 "encryption_method": "scrypt",
                 "last_updated_at": "1875-12-04T03:31:02Z"
             },
+            "single_address_mode": true,
             "state": {
                 "status": "ready"
             },
@@ -160,15 +163,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 44882974981564415,
+                    "quantity": 37279778271689079,
                     "unit": "lovelace"
                 },
                 "reward": {
-                    "quantity": 22751203618590187,
+                    "quantity": 28394431463205488,
                     "unit": "lovelace"
                 },
                 "total": {
-                    "quantity": 21830394292379073,
+                    "quantity": 33132900139232460,
                     "unit": "lovelace"
                 }
             },
@@ -188,6 +191,7 @@
                 "encryption_method": "argon2id-v2",
                 "last_updated_at": "1866-08-26T19:03:03.304911914607Z"
             },
+            "single_address_mode": true,
             "state": {
                 "status": "not_responding"
             },
@@ -210,15 +214,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 26380610518097743,
+                    "quantity": 45000000000000000,
                     "unit": "lovelace"
                 },
                 "reward": {
-                    "quantity": 3273251134920742,
+                    "quantity": 0,
                     "unit": "lovelace"
                 },
                 "total": {
-                    "quantity": 6454913213727074,
+                    "quantity": 41944385243912527,
                     "unit": "lovelace"
                 }
             },
@@ -250,6 +254,7 @@
                 "encryption_method": "scrypt",
                 "last_updated_at": "1862-01-11T11:15:07.549118913311Z"
             },
+            "single_address_mode": true,
             "state": {
                 "status": "not_responding"
             },
@@ -272,15 +277,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 36311012012051710,
+                    "quantity": 39737834198031425,
                     "unit": "lovelace"
                 },
                 "reward": {
-                    "quantity": 27646009118036369,
+                    "quantity": 7254813376293912,
                     "unit": "lovelace"
                 },
                 "total": {
-                    "quantity": 2643884911768637,
+                    "quantity": 32261440084349420,
                     "unit": "lovelace"
                 }
             },
@@ -308,6 +313,7 @@
                 "encryption_method": "pbkdf2-hmac-sha512",
                 "last_updated_at": "1869-03-18T12:03:18.858613770886Z"
             },
+            "single_address_mode": true,
             "state": {
                 "status": "not_responding"
             },
@@ -330,15 +336,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 26800011803140540,
+                    "quantity": 18447410828641988,
                     "unit": "lovelace"
                 },
                 "reward": {
-                    "quantity": 33386481798185673,
+                    "quantity": 21113860178290707,
                     "unit": "lovelace"
                 },
                 "total": {
-                    "quantity": 45000000000000000,
+                    "quantity": 0,
                     "unit": "lovelace"
                 }
             },
@@ -373,6 +379,7 @@
                 "encryption_method": "scrypt",
                 "last_updated_at": "1905-09-23T09:00:00Z"
             },
+            "single_address_mode": true,
             "state": {
                 "status": "not_responding"
             },
@@ -395,15 +402,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 2207745222986357,
+                    "quantity": 45000000000000000,
                     "unit": "lovelace"
                 },
                 "reward": {
-                    "quantity": 28492408609732782,
+                    "quantity": 3384449312852280,
                     "unit": "lovelace"
                 },
                 "total": {
-                    "quantity": 43879190472826451,
+                    "quantity": 45000000000000000,
                     "unit": "lovelace"
                 }
             },
@@ -440,6 +447,7 @@
                 "encryption_method": "pbkdf2-hmac-sha512",
                 "last_updated_at": "1895-03-11T05:21:10.450028217701Z"
             },
+            "single_address_mode": true,
             "state": {
                 "status": "ready"
             },
@@ -462,15 +470,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 23486884099623246,
+                    "quantity": 27020230923861755,
                     "unit": "lovelace"
                 },
                 "reward": {
-                    "quantity": 26298405226027337,
+                    "quantity": 31068196409376303,
                     "unit": "lovelace"
                 },
                 "total": {
-                    "quantity": 17368136472673142,
+                    "quantity": 0,
                     "unit": "lovelace"
                 }
             },
@@ -490,6 +498,7 @@
                 "encryption_method": "pbkdf2-hmac-sha512",
                 "last_updated_at": "1882-07-16T16:00:00Z"
             },
+            "single_address_mode": true,
             "state": {
                 "progress": {
                     "quantity": 26.68,
@@ -516,15 +525,15 @@
             },
             "balance": {
                 "available": {
-                    "quantity": 9684775383589473,
+                    "quantity": 4570127554367825,
                     "unit": "lovelace"
                 },
                 "reward": {
-                    "quantity": 39887952614361823,
+                    "quantity": 7820985574993270,
                     "unit": "lovelace"
                 },
                 "total": {
-                    "quantity": 45000000000000000,
+                    "quantity": 39096993580986323,
                     "unit": "lovelace"
                 }
             },
@@ -544,6 +553,7 @@
                 "encryption_method": "pbkdf2-hmac-sha512",
                 "last_updated_at": "1884-04-05T02:00:00Z"
             },
+            "single_address_mode": false,
             "state": {
                 "progress": {
                     "quantity": 1.43,

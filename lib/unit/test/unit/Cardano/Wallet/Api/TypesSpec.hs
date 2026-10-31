@@ -148,6 +148,10 @@ import Cardano.Wallet.Api.Types
     , ApiDRepMetaReference (..)
     , ApiDRepMetadata (..)
     , ApiDRepSummary (..)
+    , ApiDappBackendBuild (..)
+    , ApiDappCapabilities (..)
+    , ApiDappCapability (..)
+    , ApiDappNetwork (..)
     , ApiDecodeTransactionPostData (..)
     , ApiDecodedTransaction (..)
     , ApiDelegationAction (..)
@@ -822,6 +826,7 @@ spec = do
         jsonTest @ApiEncryptMetadata
         jsonTest @ApiEra
         jsonTest @ApiEraInfo
+        jsonTest @ApiDappCapabilities
         jsonTest @ApiError
         jsonTest @ApiErrorMissingWitnessesInTransaction
         jsonTest @ApiErrorSharedWalletNoSuchCosigner
@@ -1781,7 +1786,7 @@ instance Arbitrary AccountPostData where
     arbitrary = do
         wName <- ApiT <$> arbitrary
         accXPub <- arbitrary
-        pure $ AccountPostData wName accXPub Nothing Nothing
+        pure $ AccountPostData wName accXPub Nothing Nothing Nothing
 
 instance Arbitrary WalletPostData where
     arbitrary = genericArbitrary
@@ -2116,6 +2121,34 @@ instance Arbitrary ApiNetworkInformation where
     arbitrary = genericArbitrary
     shrink = genericShrink
 
+instance Arbitrary ApiDappCapabilities where
+    arbitrary =
+        pure
+            ApiDappCapabilities
+                { apiVersion = 1
+                , backendBuild =
+                    ApiDappBackendBuild
+                        { version = "v2026-07-23"
+                        , sourceRevision = T.replicate 40 "a"
+                        }
+                , network =
+                    ApiDappNetwork
+                        { networkId = 0
+                        , networkMagic = 1
+                        , genesisHash = T.replicate 64 "b"
+                        , currentEra = ApiConway
+                        }
+                , capabilities =
+                    [ ApiDappCapability name 1 [ApiConway]
+                    | name <-
+                        [ "transaction-context"
+                        , "reviewed-context-signing"
+                        , "cip8-cip95"
+                        , "durable-wallet-submit"
+                        ]
+                    ]
+                }
+
 instance Arbitrary NtpStatusWithOffset where
     arbitrary = do
         o <- Quantity <$> arbitrary @Integer
@@ -2317,6 +2350,7 @@ instance HasSNetworkId n => Arbitrary (PostTransactionOldData n) where
             <*> elements [Just SelfWithdrawal, Nothing]
             <*> arbitrary
             <*> arbitrary
+            <*> arbitrary
 
 instance Arbitrary TxMetadataWithSchema where
     arbitrary =
@@ -2388,6 +2422,7 @@ instance HasSNetworkId n => Arbitrary (ApiConstructTransactionData n) where
             <*> pure Nothing
             <*> pure Nothing
             <*> elements [Just HexEncoded, Just Base64Encoded, Nothing]
+            <*> arbitrary
 
 instance HasSNetworkId n => Arbitrary (ApiExternalInput n) where
     arbitrary =
@@ -2726,6 +2761,7 @@ instance HasSNetworkId n => Arbitrary (PostTransactionFeeOldData n) where
         PostTransactionFeeOldData
             <$> arbitrary
             <*> elements [Just SelfWithdrawal, Nothing]
+            <*> arbitrary
             <*> arbitrary
             <*> arbitrary
 
@@ -3367,6 +3403,9 @@ instance ToSchema ApiUtxoStatistics where
 
 instance ToSchema ApiNetworkInformation where
     declareNamedSchema _ = declareSchemaForDefinition "ApiNetworkInformation"
+
+instance ToSchema ApiDappCapabilities where
+    declareNamedSchema _ = declareSchemaForDefinition "ApiDappCapabilities"
 
 instance ToSchema ApiNetworkClock where
     declareNamedSchema _ = declareSchemaForDefinition "ApiNetworkClock"

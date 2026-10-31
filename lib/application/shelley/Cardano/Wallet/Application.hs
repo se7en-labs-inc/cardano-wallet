@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -23,6 +24,7 @@
 -- "Cardano.Wallet.Shelley.Transaction"
 module Cardano.Wallet.Application
     ( serveWallet
+    , serveWalletWithNetworkDecorator
     , module Tracers
     ) where
 
@@ -98,6 +100,9 @@ import Cardano.Wallet.Application.Tracers as Tracers
     , tracerDescriptions
     , tracerLabels
     , tracerSeverities
+    )
+import Cardano.Wallet.DB
+    ( DBFactory
     )
 import Cardano.Wallet.DB.Layer
     ( PersistAddressBook
@@ -258,6 +263,8 @@ import Prelude
 
 import qualified Cardano.Pool.DB.Layer as Pool
 import qualified Cardano.Wallet.Api.Http.Shelley.Server as Server
+import qualified Cardano.Wallet.Api.Types.Dapp as Dapp
+import qualified Cardano.Wallet.Application.Version as Version
 import qualified Cardano.Wallet.DB.Layer as Sqlite
 import qualified Cardano.Wallet.DRep.Layer as DRep
 import qualified Cardano.Wallet.DRep.Worker as DRep
@@ -309,7 +316,36 @@ serveWallet
     -> (URI -> IO ())
     -- ^ Callback to run before the main loop
     -> IO ExitCode
-serveWallet
+serveWallet = serveWalletWithNetworkDecorator pure id
+
+-- | Allow the in-process latency benchmark to time node queries and wallet
+-- database reads. The ordinary server uses undecorated layers.
+serveWalletWithNetworkDecorator
+    :: ( NetworkLayer IO (CardanoBlock StandardCrypto)
+         -> IO (NetworkLayer IO (CardanoBlock StandardCrypto))
+       )
+    -> (forall s. DBFactory IO s -> DBFactory IO s)
+    -> BlockchainSource
+    -> NetworkParameters
+    -> PipeliningStrategy (CardanoBlock StandardCrypto)
+    -> NetworkId
+    -> [PoolCertificate]
+    -> Tracers IO
+    -> Maybe FilePath
+    -> Maybe (Pool.DBDecorator IO)
+    -> HostPreference
+    -> Listen
+    -> Maybe Listen
+    -> Maybe TlsConfiguration
+    -> Maybe Settings
+    -> Maybe TokenMetadataServer
+    -> String
+    -> Block
+    -> (URI -> IO ())
+    -> IO ExitCode
+serveWalletWithNetworkDecorator
+    decorateNetwork
+    decorateDatabase
     blockchainSource
     netParams@NetworkParameters
         { protocolParameters
@@ -343,12 +379,13 @@ serveWallet
             $ networkDiscriminantVal sNetwork
         shutdownDeadline <- lift newShutdownDeadline
         netLayer <-
-            withNetworkLayer
-                networkTracer
-                pipeliningStrategy
-                blockchainSource
-                network
-                netParams
+            lift . decorateNetwork
+                =<< withNetworkLayer
+                    networkTracer
+                    pipeliningStrategy
+                    blockchainSource
+                    network
+                    netParams
         (stakePoolLayer, drepLayer) <- case blockchainSource of
             NodeSource{} -> do
                 stakePoolDbLayer <-
@@ -577,6 +614,12 @@ serveWallet
                                 drl
                                 ntp
                                 blockchainSource
+                                Dapp.ApiDappBackendBuild
+                                    { Dapp.version =
+                                        Version.showVersionAsDateText Version.version
+                                    , Dapp.sourceRevision =
+                                        Version.gitRevisionText Version.gitRevision
+                                    }
                 start
                     serverSettings
                     apiServerTracer
@@ -650,7 +693,7 @@ serveWallet
                 (block0, netParams)
                 netLayer
                 txLayer
-                dbFactory
+                (decorateDatabase dbFactory)
                 tokenMetaClient
                 coworker
 

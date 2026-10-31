@@ -3161,35 +3161,32 @@ buildSignSubmitTransaction
                                     (Just Pending)
                                     Nothing
                                     Nothing
-                        txWithSlot <-
-                            ( throwOnErr
+                        ( throwOnErr
                                 <=< (Delta.onDBVar walletState . Delta.updateWithResultAndError)
                             )
-                                $ \s -> do
-                                    let wallet = WalletState.getLatest s
-                                        utxo = availableUTxO (Set.fromList pendingTxs) wallet
-                                    buildAndSignTransactionPure @k @s
-                                        timeTranslation
-                                        utxo
-                                        rootKey
-                                        scheme
-                                        pwd
-                                        protocolParams
-                                        txLayer
-                                        changeAddrGen
-                                        preSelection
-                                        txCtx
-                                        & (`runStateT` wallet)
-                                        & runExceptT . withExceptT wrapBalanceConstructError
-                                        & (`evalRand` stdGen)
-                                        & fmap
-                                            ( \(builtTx, wallet') ->
-                                                ( [ReplacePrologue $ getPrologue $ getState wallet']
-                                                , (builtTx, currentTip wallet' ^. #slotNo)
-                                                )
+                            $ \s -> do
+                                let wallet = WalletState.getLatest s
+                                    utxo = availableUTxO (Set.fromList pendingTxs) wallet
+                                buildAndSignTransactionPure @k @s
+                                    timeTranslation
+                                    utxo
+                                    rootKey
+                                    scheme
+                                    pwd
+                                    protocolParams
+                                    txLayer
+                                    changeAddrGen
+                                    preSelection
+                                    txCtx
+                                    & (`runStateT` wallet)
+                                    & runExceptT . withExceptT wrapBalanceConstructError
+                                    & (`evalRand` stdGen)
+                                    & fmap
+                                        ( \(builtTx, wallet') ->
+                                            ( [ReplacePrologue $ getPrologue $ getState wallet']
+                                            , (builtTx, currentTip wallet' ^. #slotNo)
                                             )
-
-                        pure txWithSlot
+                                        )
 
                     runExceptT (submitTx nullTracer db netLayer built)
                         >>= either (throwIO . ExceptionSubmitTx) pure

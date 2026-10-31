@@ -1,5 +1,4 @@
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Wallet.Api.DappSpec (spec) where
@@ -88,8 +87,7 @@ spec = do
 
         it "constructs the complete response only for Conway" $ do
             let build = ApiDappBackendBuild "v2026-07-23" (T.pack $ forty 'a')
-                make era =
-                    makeApiDappCapabilities build 0 1 (T.pack $ sixtyFour 'b') era
+                make = makeApiDappCapabilities build 0 1 (T.pack $ sixtyFour 'b')
             make (Read.EraValue Read.Conway) `shouldSatisfy` isJust
             make (Read.EraValue Read.Dijkstra) `shouldBe` Nothing
             make (Read.EraValue Read.Babbage) `shouldBe` Nothing
@@ -130,12 +128,13 @@ spec = do
             ]
     describe "dApp backend errors"
         $ mapM_
-            ( \(dappError, status, code, info, message) ->
+            ( \(dappError, expectedStatus, code, expectedInfo, expectedMessage) ->
                 it (show dappError) $ do
                     let response = dappServerError dappError
-                    errHTTPCode response `shouldBe` status
+                    errHTTPCode response `shouldBe` expectedStatus
                     eitherDecode (errBody response)
-                        `shouldBe` Right (ApiError info (ApiErrorMessage message))
+                        `shouldBe` Right
+                            (ApiError expectedInfo (ApiErrorMessage expectedMessage))
                     BL8.unpack (errBody response)
                         `shouldSatisfy` isInfixOf ("\"code\":\"" <> code <> "\"")
                     BL8.unpack (errBody response)
@@ -307,11 +306,11 @@ validCapabilities =
     ]
 
 capability :: String -> Integer -> String
-capability name revision =
+capability name capabilityRevision =
     "{\"name\":\""
         <> name
         <> "\",\"revision\":"
-        <> show revision
+        <> show capabilityRevision
         <> ",\"available_eras\":[\"conway\"]}"
 
 capabilityWithEras :: String -> String -> String
@@ -439,10 +438,10 @@ breakOn needle = go []
         | otherwise = go (x : prefix) xs
 
 forty :: Char -> String
-forty character = replicate 40 character
+forty = replicate 40
 
 sixtyFour :: Char -> String
-sixtyFour character = replicate 64 character
+sixtyFour = replicate 64
 
 isLeft :: Either a b -> Bool
 isLeft = either (const True) (const False)

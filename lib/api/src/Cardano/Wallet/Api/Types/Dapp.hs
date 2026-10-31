@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Cardano.Wallet.Api.Types.Dapp

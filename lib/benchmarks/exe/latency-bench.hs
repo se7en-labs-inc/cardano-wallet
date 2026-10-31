@@ -1,7 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -304,6 +303,7 @@ import Control.Monad
     ( forM
     , replicateM
     , replicateM_
+    , unless
     , void
     , when
     )
@@ -366,6 +366,7 @@ import Data.List
     )
 import Data.Maybe
     ( fromMaybe
+    , isJust
     , mapMaybe
     )
 import Data.Text.Class
@@ -579,14 +580,9 @@ checkContextBudget label metric baselines finalRun = do
                         <> name
                         <> "; remove machine load and repeat"
             else
-                if observed > budget
-                    then
-                        error
-                            $ "context benchmark: regression above budget: "
-                                <> label
-                                <> "/"
-                                <> name
-                    else pure ()
+                when (observed > budget)
+                    $ error
+                    $ "context benchmark: regression above budget: " <> label <> "/" <> name
 
 -- Each measured wallet/API/RTS runs in a fresh OS process with its own
 -- disposable DB while the pinned local node stays alive for all four runs.
@@ -975,7 +971,7 @@ proveBoundedQueryTimeout = do
             ( writeIORef running True
                 >> (threadDelay 60_000_000 `finally` writeIORef running False)
             )
-            (threadDelay 60_000_000 >> pure ())
+            (void (threadDelay 60_000_000))
     ended <- getMonotonicTimeNSec
     orphan <- readIORef running
     putStrLn
@@ -985,9 +981,8 @@ proveBoundedQueryTimeout = do
             <> show outcome
             <> ",orphan_client="
             <> show orphan
-    if outcome /= Nothing || orphan || ended - started < 29_000_000_000
-        then error "context benchmark: bounded node query did not clean up"
-        else pure ()
+    when (isJust outcome || orphan || ended - started < 29_000_000_000)
+        $ error "context benchmark: bounded node query did not clean up"
 
 pureDecodePhase :: String -> BS.ByteString -> IO ()
 pureDecodePhase name bytes = do
@@ -1105,9 +1100,8 @@ cancelContextScene queries action = do
                     displayException
                     (const "completed-before-cancel")
                     outcome
-        if not entered || either (const False) (const True) outcome
-            then error "context benchmark: cancellation missed node query"
-            else pure ()
+        when (not entered || either (const False) (const True) outcome)
+            $ error "context benchmark: cancellation missed node query"
 
 -- The benchmark-only faucet funds 250 fixed external addresses from this
 -- mnemonic directly in genesis: no tip-dependent TTL, change output or funding
@@ -1271,7 +1265,7 @@ exactFromContextTx n source target = fit 0
     fit filler
         | filler > 4 = error "context benchmark: no exact-size typed metadata"
         | otherwise =
-            maybe (fit $ filler + 1) Prelude.id
+            fromMaybe (fit $ filler + 1)
                 $ search filler 0 target
     search filler low high
         | low > high = Nothing
@@ -1316,7 +1310,7 @@ alignContextWallets name wallets = do
             let caughtUp =
                     candidate /= initialPoint
                         && all ((== candidate) . view #tip) current
-            when (not caughtUp) $ liftIO $ threadDelay 10_000
+            unless caughtUp $ liftIO $ threadDelay 10_000
             after <- request CN.networkInformation
             ended <- liftIO getMonotonicTimeNSec
             let point = after ^. #nodeTip
@@ -1733,7 +1727,7 @@ pendingContextScene reporter dbDir wallet network destination inputs client = do
             :: forall a
              . (DBLayer IO (SeqState C.Testnet42 ShelleyKey) -> IO a)
             -> IO a
-        withJournal action =
+        withJournal =
             withLoadDBLayerFromFile
                 (ShelleyWallet :: WalletFlavorS (SeqState C.Testnet42 ShelleyKey))
                 nullTracer
@@ -1741,15 +1735,12 @@ pendingContextScene reporter dbDir wallet network destination inputs client = do
                 walletId
                 Nothing
                 file
-                action
     runIndex <-
         liftIO
             $ maybe 0 Prelude.read
                 <$> lookupEnv "CONTEXT_BENCH_RUN_INDEX"
-    if runIndex < 0 || runIndex > 4 || length inputs /= 250
-        then
-            error "context benchmark: missing independent submission outpoints"
-        else pure ()
+    when (runIndex < 0 || runIndex > 4 || length inputs /= 250)
+        $ error "context benchmark: missing independent submission outpoints"
     let spare = inputs !! (249 - runIndex)
     signed <- mapM sign $ take 20 inputs <> [spare]
     let entries = zipWith asSubmission (take 20 inputs) (take 20 signed)
@@ -1769,9 +1760,8 @@ pendingContextScene reporter dbDir wallet network destination inputs client = do
             <> show (sum $ BS.length <$> take 20 signed)
             <> ",decisions="
             <> show decisions
-    if any (/= DurableSubmissionAuthorized) decisions
-        then error "context benchmark: durable DB insert failed"
-        else pure ()
+    when (any (/= DurableSubmissionAuthorized) decisions)
+        $ error "context benchmark: durable DB insert failed"
     (captureNs, confirmNs, capturedInputs, capturedPending) <- liftIO
         $ withJournal
         $ \DBLayer{atomicallyReadContext, readCheckpoint, readDurableSubmissions} -> do

@@ -303,7 +303,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Wallet.Address.Derivation.Shared as Shared
 import qualified Cardano.Wallet.Address.Derivation.Shelley as Shelley
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Encoding as T
 
 dappCapabilities
     :: forall n s
@@ -328,7 +328,7 @@ dappCapabilities api backendBuild =
                         backendBuild
                         (fromIntegral networkIdValue)
                         (fromIntegral networkMagicValue)
-                        (TE.decodeUtf8 $ convertToBase Base16 genesisHashBytes)
+                        (T.decodeUtf8 $ convertToBase Base16 genesisHashBytes)
                         era
 
 server

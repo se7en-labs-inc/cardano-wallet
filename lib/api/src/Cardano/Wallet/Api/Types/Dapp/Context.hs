@@ -3,7 +3,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Wallet.Api.Types.Dapp.Context
     ( DappJSON
@@ -97,6 +96,10 @@ import Data.Char
 import Data.List
     ( group
     , sort
+    )
+import Data.Maybe
+    ( fromMaybe
+    , isJust
     )
 import Data.Text
     ( Text
@@ -610,7 +613,7 @@ instance FromJSON ApiDappDependency where
         unless (source `elem` [Earlier, Pending])
             $ fail "invalid dependency source"
         unless
-            ((source == Earlier) == maybe False (const True) sourceTransactionIndex)
+            ((source == Earlier) == isJust sourceTransactionIndex)
             $ fail "invalid source transaction index"
         unless (maybe True (< transactionIndex) sourceTransactionIndex)
             $ fail "source transaction index must be earlier"
@@ -1371,7 +1374,7 @@ parseEnum label values = withText label $ \value ->
 enumJson :: Eq a => [(a, Text)] -> a -> Value
 enumJson values value =
     String
-        $ maybe (error "incomplete enum encoding") id
+        $ fromMaybe (error "incomplete enum encoding")
         $ lookup value values
 
 explicitStrictOptions :: Aeson.Options

@@ -6,7 +6,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -358,8 +357,8 @@ validVKeyWitnessHashes (Read.Tx ledgerTx) =
         [ Crypto.hashToBytes hash
         | witness@(WitVKey (LedgerKeys.VKey verificationKey) signature) <-
             Set.toList $ ledgerTx ^. witsTxL . addrTxWitsL
-        , Right () <- [verifySignedDSIGN () verificationKey bodyHash signature]
         , let LedgerKeys.KeyHash hash = witVKeyHash witness
+        , Right () <- [verifySignedDSIGN () verificationKey bodyHash signature]
         ]
   where
     bodyHash =
@@ -369,7 +368,7 @@ validVKeyWitnessHashes (Read.Tx ledgerTx) =
 
 supportedCredentialSurfaces :: DecodedTx -> Bool
 supportedCredentialSurfaces DecodedTx{transaction = Read.Tx ledgerTx} =
-    all supportedCertificate (toList $ ledgerTx ^. bodyTxL . certsTxBodyL)
+    all supportedCertificate (ledgerTx ^. bodyTxL . certsTxBodyL)
         && Map.null voting
         && null (ledgerTx ^. bodyTxL . proposalProceduresTxBodyL)
   where
@@ -459,8 +458,8 @@ paymentOwnership
     -> [([ApiDappRole], Output Read.Conway)]
     -> Either DappError (SeqState n ShelleyKey, [ApiDappOwnership])
 paymentOwnership initial values =
-    fmap (\(discovery, found) -> (discovery, sort $ Map.elems found))
-        $ foldM
+    (\(discovery, found) -> (discovery, sort $ Map.elems found))
+        <$> foldM
             classify
             ( initial
             , Map.empty
@@ -873,8 +872,7 @@ stakeEvidence
     :: SeqState n ShelleyKey
     -> [DecodedTx]
     -> [ApiDappOwnership]
-stakeEvidence discovery requested =
-    concatMap transactionEvidence requested
+stakeEvidence discovery = concatMap transactionEvidence
   where
     stakeHash =
         blake2b224
@@ -1399,7 +1397,7 @@ validateTransactionContextResponseForRequest request response = do
         unless (actualRoles == expectedRoles)
             $ Left "output roles do not match request"
         unless
-            ((not $ null earlierSources) == (Earlier `elem` output.provenance))
+            (not (null earlierSources) == (Earlier `elem` output.provenance))
             $ Left "earlier provenance mismatch"
         mapM_
             ( \source ->

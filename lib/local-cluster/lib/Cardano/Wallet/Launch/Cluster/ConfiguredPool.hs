@@ -142,7 +142,7 @@ import Data.Maybe
     , maybeToList
     )
 import Data.MaybeK
-    ( IsMaybe (IsNothing, IsJust)
+    ( IsMaybe (IsJust, IsNothing)
     )
 import Data.Tagged
     ( Tagged (..)
@@ -542,7 +542,8 @@ configurePool metadataServer recipe = do
         operatePool :: NodeParams IsNothing -> ClusterM a -> ClusterM a
         operatePool nodeParams action =
             operateConfiguredPool nodeParams $ \NothingK -> action
-        operatePoolNode :: NodeParams IsJust -> (RunningNode -> ClusterM a) -> ClusterM a
+        operatePoolNode
+            :: NodeParams IsJust -> (RunningNode -> ClusterM a) -> ClusterM a
         operatePoolNode nodeParams action =
             operateConfiguredPool nodeParams $ \(JustK node) -> action node
         operateConfiguredPool

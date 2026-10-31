@@ -184,7 +184,9 @@ withSingleNodeCluster
     -> (RunningNode -> IO a)
     -> IO a
 withSingleNodeCluster config =
-    withClusterMode True config{cfgStakePools = pure $ NE.head $ cfgStakePools config}
+    withClusterMode
+        True
+        config{cfgStakePools = pure $ NE.head $ cfgStakePools config}
 
 withClusterMode
     :: HasCallStack
@@ -194,7 +196,8 @@ withClusterMode
     -> (RunningNode -> IO a)
     -> IO a
 withClusterMode singleNode config@Config{..} faucetFunds onClusterStart = runClusterM config
-    $ bracketTracer' (if singleNode then "withSingleNodeCluster" else "withCluster")
+    $ bracketTracer'
+        (if singleNode then "withSingleNodeCluster" else "withCluster")
     $ do
         let debug :: MonadIO m => Text -> m ()
             debug x = liftIO $ traceWith cfgTracer $ MsgDebug x
@@ -231,13 +234,15 @@ withClusterMode singleNode config@Config{..} faucetFunds onClusterStart = runClu
             if singleNode
                 then do
                     producer <-
-                        ContT $ operatePoolNode pool0 $ NodeParams
-                            genesisFiles
-                            cfgLastHardFork
-                            (fst pool0port, [])
-                            cfgNodeLogging
-                            cfgNodeOutputFile
-                            (JustK cfgNodeToClientSocket)
+                        ContT
+                            $ operatePoolNode pool0
+                            $ NodeParams
+                                genesisFiles
+                                cfgLastHardFork
+                                (fst pool0port, [])
+                                cfgNodeLogging
+                                cfgNodeOutputFile
+                                (JustK cfgNodeToClientSocket)
                     lift $ extraClusterSetupUsingNode configuredPools producer
                     liftIO $ onClusterStart producer
                 else do

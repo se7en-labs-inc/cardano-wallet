@@ -146,8 +146,8 @@ benchmark latency
     , cardano-diffusion:api
     , cardano-ledger-api
     , cardano-ledger-core
-    , cardano-ledger-shelley
     , cardano-ledger-read
+    , cardano-ledger-shelley
     , cardano-wallet
     , cardano-wallet-api
     , cardano-wallet-application
@@ -175,8 +175,8 @@ benchmark latency
     , http-types
     , local-cluster
     , mtl
-    , ouroboros-network:api
     , optparse-applicative
+    , ouroboros-network:api
     , pathtype
     , process
     , resourcet
@@ -188,8 +188,8 @@ benchmark latency
     , unliftio
     , unliftio-core
     , wai-middleware-logging
-    , yaml
     , with-utf8
+    , yaml
 
 benchmark db
   import:         language, opts-exe

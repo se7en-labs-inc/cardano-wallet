@@ -53,15 +53,15 @@ import Cardano.Ledger.Api
     , Datum (..)
     , addrTxOutL
     , addrTxWitsL
-    , coinTxOutL
-    , mkBasicTxOut
     , bodyTxL
+    , coinTxOutL
     , collateralInputsTxBodyL
     , datumTxOutL
     , feeTxBodyL
     , hashBinaryData
     , inputsTxBodyL
     , makeBinaryData
+    , mkBasicTxOut
     , outputsTxBodyL
     , referenceInputsTxBodyL
     , referenceScriptTxOutL
@@ -76,16 +76,16 @@ import Cardano.Ledger.Api.Tx
 import Cardano.Ledger.Api.Tx.Body
     ( mkBasicTxBody
     )
+import Cardano.Ledger.BaseTypes
+    ( StrictMaybe (..)
+    , TxIx (..)
+    )
 import Cardano.Ledger.Binary
     ( serialize'
     , shelleyProtVer
     )
 import Cardano.Ledger.Val
     ( inject
-    )
-import Cardano.Ledger.BaseTypes
-    ( StrictMaybe (..)
-    , TxIx (..)
     )
 import Cardano.Mnemonic
     ( SomeMnemonic (..)
@@ -1932,58 +1932,76 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                         "alonzo" ->
                             TxCBOR.serializeTx
                                 ( LedgerTx.Tx
-                                    (set (bodyTxL . inputsTxBodyL)
+                                    ( set
+                                        (bodyTxL . inputsTxBodyL)
                                         (view inputsTxBodyL templateBody)
-                                        $ set (bodyTxL . outputsTxBodyL)
-                                            (fromList
+                                        $ set
+                                            (bodyTxL . outputsTxBodyL)
+                                            ( fromList
                                                 [ mkBasicTxOut
                                                     (view addrTxOutL output)
                                                     (inject $ view coinTxOutL output)
                                                 | output <- templateOutputs
-                                                ])
-                                        $ set (bodyTxL . feeTxBodyL)
+                                                ]
+                                            )
+                                        $ set
+                                            (bodyTxL . feeTxBodyL)
                                             (view feeTxBodyL templateBody)
-                                        $ set (bodyTxL . vldtTxBodyL)
+                                        $ set
+                                            (bodyTxL . vldtTxBodyL)
                                             (view vldtTxBodyL templateBody)
-                                            $ mkBasicTx mkBasicTxBody)
+                                        $ mkBasicTx mkBasicTxBody
+                                    )
                                     :: Read.Tx Read.Alonzo
                                 )
                         "babbage" ->
                             TxCBOR.serializeTx
                                 ( LedgerTx.Tx
-                                    (set (bodyTxL . inputsTxBodyL)
+                                    ( set
+                                        (bodyTxL . inputsTxBodyL)
                                         (view inputsTxBodyL templateBody)
-                                        $ set (bodyTxL . outputsTxBodyL)
-                                            (fromList
+                                        $ set
+                                            (bodyTxL . outputsTxBodyL)
+                                            ( fromList
                                                 [ mkBasicTxOut
                                                     (view addrTxOutL output)
                                                     (inject $ view coinTxOutL output)
                                                 | output <- templateOutputs
-                                                ])
-                                        $ set (bodyTxL . feeTxBodyL)
+                                                ]
+                                            )
+                                        $ set
+                                            (bodyTxL . feeTxBodyL)
                                             (view feeTxBodyL templateBody)
-                                        $ set (bodyTxL . vldtTxBodyL)
+                                        $ set
+                                            (bodyTxL . vldtTxBodyL)
                                             (view vldtTxBodyL templateBody)
-                                            $ mkBasicTx mkBasicTxBody)
+                                        $ mkBasicTx mkBasicTxBody
+                                    )
                                     :: Read.Tx Read.Babbage
                                 )
                         _ ->
                             TxCBOR.serializeTx
                                 ( LedgerTx.Tx
-                                    (set (bodyTxL . inputsTxBodyL)
+                                    ( set
+                                        (bodyTxL . inputsTxBodyL)
                                         (view inputsTxBodyL templateBody)
-                                        $ set (bodyTxL . outputsTxBodyL)
-                                            (fromList
+                                        $ set
+                                            (bodyTxL . outputsTxBodyL)
+                                            ( fromList
                                                 [ mkBasicTxOut
                                                     (view addrTxOutL output)
                                                     (inject $ view coinTxOutL output)
                                                 | output <- templateOutputs
-                                                ])
-                                        $ set (bodyTxL . feeTxBodyL)
+                                                ]
+                                            )
+                                        $ set
+                                            (bodyTxL . feeTxBodyL)
                                             (view feeTxBodyL templateBody)
-                                        $ set (bodyTxL . vldtTxBodyL)
+                                        $ set
+                                            (bodyTxL . vldtTxBodyL)
                                             (view vldtTxBodyL templateBody)
-                                            $ mkBasicTx mkBasicTxBody)
+                                        $ mkBasicTx mkBasicTxBody
+                                    )
                                     :: Read.Tx Read.Conway
                                 )
                     NetworkParameters genesis _ _ = _networkParameters ctx
@@ -2006,29 +2024,38 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                         $ either (fail . show) pure
                         $ TxCBOR.deserializeTxWithOutputBytes @Read.Conway
                         $ BL.fromStrict sourceBytes
-                liftIO $ BL.toStrict (TxCBOR.serializeTx sourceTx) `shouldBe` sourceBytes
+                liftIO
+                    $ BL.toStrict (TxCBOR.serializeTx sourceTx)
+                    `shouldBe` sourceBytes
                 context <-
                     request @ApiDappTransactionContextResponse
                         ctx
                         (Link.transactionContext wallet)
                         Default
                         (Json $ toJSON contextPayload)
-                verify context
+                verify
+                    context
                     [ expectResponseCode HTTP.status200
                     , expectField #era (`shouldBe` "conway")
                     , expectField #network (`shouldBe` network)
                     , expectField #outputs (`shouldSatisfy` (not . null))
-                    , expectField #requiredWalletProofs
-                        (`shouldSatisfy` any
-                            (\ApiDappRequiredWalletProof{proofKind, required} ->
-                                proofKind == NormalInputProof && required))
+                    , expectField
+                        #requiredWalletProofs
+                        ( `shouldSatisfy`
+                            any
+                                ( \ApiDappRequiredWalletProof{proofKind, required} ->
+                                    proofKind == NormalInputProof && required
+                                )
+                        )
                     ]
                 let signPayload =
-                        Json $ toJSON $ Dapp.ApiDappWitnessSignRequest
-                            1
-                            (getResponse context)
-                            [Dapp.ApiDappWitnessSignItem (ApiDappHex sourceBytes) False]
-                            (ApiT $ Passphrase $ BA.convert $ T.encodeUtf8 fixturePassphrase)
+                        Json
+                            $ toJSON
+                            $ Dapp.ApiDappWitnessSignRequest
+                                1
+                                (getResponse context)
+                                [Dapp.ApiDappWitnessSignItem (ApiDappHex sourceBytes) False]
+                                (ApiT $ Passphrase $ BA.convert $ T.encodeUtf8 fixturePassphrase)
                 witnesses <-
                     request @Dapp.ApiDappWitnessSignResponse
                         ctx
@@ -2038,8 +2065,12 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                 verify witnesses [expectResponseCode HTTP.status200]
                 let Dapp.ApiDappWitnessSignResponse
                         1
-                        [Dapp.ApiDappWitnessResult 0 (ApiDappHex signedId) (ApiDappHex witnessBytes)] =
-                        getResponse witnesses
+                        [ Dapp.ApiDappWitnessResult
+                                0
+                                (ApiDappHex signedId)
+                                (ApiDappHex witnessBytes)
+                            ] =
+                            getResponse witnesses
                     expectedId =
                         ReadHash.hashToBytes $ Read.hashFromTxId $ Read.getTxId sourceTx
                 liftIO $ signedId `shouldBe` expectedId
@@ -2055,7 +2086,9 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                         bodyPrefix
                             <> witnessBytes
                             <> BS.drop (BS.length bodyPrefix + 1) sourceBytes
-                TxCBOR.TxWithOutputBytes{transaction = signedTx@(Read.Tx signedLedgerTx)} <-
+                TxCBOR.TxWithOutputBytes
+                    { transaction = signedTx@(Read.Tx signedLedgerTx)
+                    } <-
                     liftIO
                         $ either (fail . show) pure
                         $ TxCBOR.deserializeTxWithOutputBytes @Read.Conway
@@ -2065,23 +2098,28 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                     view (witsTxL . addrTxWitsL) signedLedgerTx
                         `shouldSatisfy` (not . Set.null)
                 submitted <- submit signedBytes
-                verify submitted
+                verify
+                    submitted
                     [ expectResponseCode HTTP.status200
                     , expectField #revision (`shouldBe` 1)
                     , expectField #transactionId (`shouldBe` ApiDappHex expectedId)
-                    , expectField #status
+                    , expectField
+                        #status
                         (`shouldSatisfy` (`elem` [SubmissionSubmitted, SubmissionInLedger]))
                     ]
                 eventually ("dApp " <> origin <> " transaction is confirmed") $ do
                     confirmed <-
                         request @(ApiTransaction n)
                             ctx
-                            (Link.getTransaction @'Shelley wallet
-                                (ApiTxId $ ApiT $ Hash expectedId))
+                            ( Link.getTransaction @'Shelley
+                                wallet
+                                (ApiTxId $ ApiT $ Hash expectedId)
+                            )
                             Default
                             Empty
-                    verify confirmed
-                        [expectResponseCode HTTP.status200
+                    verify
+                        confirmed
+                        [ expectResponseCode HTTP.status200
                         , expectField (#status . #getApiT) (`shouldBe` InLedger)
                         ]
                 stale <-
@@ -2090,34 +2128,46 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                         (Link.dappWitnesses wallet)
                         Default
                         signPayload
-                liftIO $ fst stale `shouldSatisfy`
-                    (`elem` [HTTP.status400, HTTP.status503])
-                verify stale
-                    [ expectErrorInfo (`shouldSatisfy`
-                        (`elem` [DappContextConflict, DappContextUnavailable]))
+                liftIO
+                    $ fst stale
+                    `shouldSatisfy` (`elem` [HTTP.status400, HTTP.status503])
+                verify
+                    stale
+                    [ expectErrorInfo
+                        ( `shouldSatisfy`
+                            (`elem` [DappContextConflict, DappContextUnavailable])
+                        )
                     ]
                 let badBytes = "\x81\x00"
                     unsupported =
                         BL.toStrict
                             $ TxCBOR.serializeTx
-                                (LedgerTx.Tx
+                                ( LedgerTx.Tx
                                     (set isValidTxL (IsValid False) ledgerTx)
-                                        :: Read.Tx Read.Conway)
-                forM_ [(badBytes, DappInvalidRequest), (unsupported, DappInvalidRequest)]
+                                    :: Read.Tx Read.Conway
+                                )
+                forM_
+                    [(badBytes, DappInvalidRequest), (unsupported, DappInvalidRequest)]
                     $ \(bytes, errorInfo) -> do
                         rejectedContext <-
                             request @ApiDappTransactionContextResponse
                                 ctx
                                 (Link.transactionContext wallet)
                                 Default
-                                (Json $ toJSON $ contextPayload
-                                    {transactions = [ApiDappHex bytes]})
-                        verify rejectedContext
+                                ( Json
+                                    $ toJSON
+                                    $ contextPayload
+                                        { transactions = [ApiDappHex bytes]
+                                        }
+                                )
+                        verify
+                            rejectedContext
                             [ expectResponseCode HTTP.status400
                             , expectErrorInfo (`shouldBe` errorInfo)
                             ]
                         rejectedSubmit <- submit bytes
-                        verify rejectedSubmit
+                        verify
+                            rejectedSubmit
                             [ expectResponseCode HTTP.status400
                             , expectErrorInfo (`shouldBe` errorInfo)
                             ]

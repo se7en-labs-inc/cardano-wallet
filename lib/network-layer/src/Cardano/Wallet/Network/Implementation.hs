@@ -858,8 +858,7 @@ postTxOneShot tr cfg vData conn tx =
                 $ writeTQueue
                     queue
                     (CmdSubmitTx consensusGenTx $ atomically . putTMVar response)
-            let client v versionData' =
-                    mkOneShotTxSubmissionClient tr cfg queue v versionData'
+            let client = mkOneShotTxSubmissionClient tr cfg queue
                 connection =
                     connectClientOnce
                         (MsgConnectionStatus ClientLocalTxSubmission >$< tr)
@@ -872,8 +871,7 @@ postTxOneShot tr cfg vData conn tx =
                     pure $ Left $ ErrPostTxValidationError $ T.pack $ show e
                 Left () ->
                     throwIO
-                        $ userError
-                        $ "one-shot local transaction submission disconnected"
+                        $ userError "one-shot local transaction submission disconnected"
 
 mkOneShotTxSubmissionClient
     :: Tracer IO Log
@@ -888,7 +886,7 @@ mkOneShotTxSubmissionClient
     -> NodeToClientVersion
     -> NodeToClientVersionData
     -> WalletOuroborosApplication IO
-mkOneShotTxSubmissionClient tr cfg queue v vData =
+mkOneShotTxSubmissionClient tr cfg queue v =
     nodeToClientProtocols
         NodeToClientProtocols
             { localChainSyncProtocol = doNothingProtocol
@@ -904,7 +902,6 @@ mkOneShotTxSubmissionClient tr cfg queue v vData =
                         runPeer (MsgTxSubmission >$< tr) codec channel peer
             }
         v
-        vData
 
 consensusGenTxFromTxRecent
     :: forall era

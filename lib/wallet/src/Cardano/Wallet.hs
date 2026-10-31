@@ -2556,11 +2556,11 @@ signDappWitnesses root userPwd body candidates =
 
     deriveV1 rootKey encryptionPwd = \case
         [purpose, coinType, account, role, address]
-            | purpose == 0x8000073c
-                && coinType == 0x80000717
-                && account >= 0x80000000
+            | purpose == 0x8000_073c
+                && coinType == 0x8000_0717
+                && account >= 0x8000_0000
                 && role <= 1
-                && address < 0x80000000 ->
+                && address < 0x8000_0000 ->
                 let accountKey =
                         deriveAccountPrivateKeyShelley
                             (Index purpose)
@@ -2574,9 +2574,9 @@ signDappWitnesses root userPwd body candidates =
                             (if role == 0 then UtxoExternal else UtxoInternal)
                             (Index address :: Index 'Soft 'CredFromKeyK)
         [purpose, coinType, account, role, address]
-            | purpose == 0x8000073c
-                && coinType == 0x80000717
-                && account >= 0x80000000
+            | purpose == 0x8000_073c
+                && coinType == 0x8000_0717
+                && account >= 0x8000_0000
                 && role == 2
                 && address == 0 ->
                 let accountKey =
@@ -2592,9 +2592,9 @@ signDappWitnesses root userPwd body candidates =
                             MutableAccount
                             zeroAccount
         [purpose, coinType, account, role, address]
-            | purpose == 0x8000073c
-                && coinType == 0x80000717
-                && account >= 0x80000000
+            | purpose == 0x8000_073c
+                && coinType == 0x8000_0717
+                && account >= 0x8000_0000
                 && role == 3
                 && address == 0 ->
                 let accountKey =
@@ -2697,11 +2697,11 @@ signDappData root userPwd path expectedHash message = do
 
     deriveV1 rootKey encryptionPwd = \case
         [purpose, coinType, account, role, address]
-            | purpose == 0x8000073c
-                && coinType == 0x80000717
-                && account >= 0x80000000
+            | purpose == 0x8000_073c
+                && coinType == 0x8000_0717
+                && account >= 0x8000_0000
                 && role <= 1
-                && address < 0x80000000 ->
+                && address < 0x8000_0000 ->
                 let accountKey =
                         deriveAccountPrivateKeyShelley
                             (Index purpose)
@@ -2715,9 +2715,9 @@ signDappData root userPwd path expectedHash message = do
                             (if role == 0 then UtxoExternal else UtxoInternal)
                             (Index address :: Index 'Soft 'CredFromKeyK)
         [purpose, coinType, account, role, address]
-            | purpose == 0x8000073c
-                && coinType == 0x80000717
-                && account >= 0x80000000
+            | purpose == 0x8000_073c
+                && coinType == 0x8000_0717
+                && account >= 0x8000_0000
                 && role == 2
                 && address == 0 ->
                 let accountKey =
@@ -2733,9 +2733,9 @@ signDappData root userPwd path expectedHash message = do
                             MutableAccount
                             zeroAccount
         [purpose, coinType, account, role, address]
-            | purpose == 0x8000073c
-                && coinType == 0x80000717
-                && account >= 0x80000000
+            | purpose == 0x8000_073c
+                && coinType == 0x8000_0717
+                && account >= 0x8000_0000
                 && role == 3
                 && address == 0 ->
                 let accountKey =
@@ -3859,7 +3859,7 @@ submitWalletScoped tr DBLayer{..} nw conwayOnly tx sealed expiration = do
                 Nothing
                 Nothing
                 Nothing
-    when (not $ Set.disjoint (outpoints normal) (outpoints collateral))
+    unless (Set.disjoint (outpoints normal) (outpoints collateral))
         $ throwE ErrSubmitTxInputConflict
     decision <-
         lift
@@ -4135,7 +4135,7 @@ forgetTx ctx txid =
         $ Submissions.removePendingOrExpiredTx txid
 
 -- | Parameters for the local submission reconciliation watcher.
-data LocalTxSubmissionConfig = LocalTxSubmissionConfig
+newtype LocalTxSubmissionConfig = LocalTxSubmissionConfig
     { rateLimit :: DiffTime
     -- ^ Minimum time between reconciliation checks.
     }

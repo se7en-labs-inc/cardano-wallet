@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Copyright: © 2023 IOHK License: Apache-2.0
 --
@@ -101,26 +101,47 @@ spec = do
                             "SELECT tx_id, expiration, acceptance, authorized, status, attempt_generation FROM dapp_submission ORDER BY status"
                             []
                 rows
-                    `shouldBe` [ ( Sqlite.Single ("309bcb04da03b16436e65709c2e5ad2d75a1ebfec3c0b328e0a7a7e10b398aae" :: Text)
-                                 , Sqlite.Single (Just (123 :: Int))
-                                 , Sqlite.Single (Just (456 :: Int))
-                                 , Sqlite.Single (0 :: Int)
-                                 , Sqlite.Single (4 :: Int)
-                                 , Sqlite.Single (0 :: Int)
-                                 )
-                               , (Sqlite.Single "ledger", Sqlite.Single (Just 234), Sqlite.Single (Just 567), Sqlite.Single 0, Sqlite.Single 5, Sqlite.Single 0)
-                               , (Sqlite.Single "expired", Sqlite.Single (Just 345), Sqlite.Single (Just 678), Sqlite.Single 0, Sqlite.Single 6, Sqlite.Single 0)
+                    `shouldBe` [
+                                   ( Sqlite.Single
+                                        ( "309bcb04da03b16436e65709c2e5ad2d75a1ebfec3c0b328e0a7a7e10b398aae"
+                                            :: Text
+                                        )
+                                   , Sqlite.Single (Just (123 :: Int))
+                                   , Sqlite.Single (Just (456 :: Int))
+                                   , Sqlite.Single (0 :: Int)
+                                   , Sqlite.Single (4 :: Int)
+                                   , Sqlite.Single (0 :: Int)
+                                   )
+                               ,
+                                   ( Sqlite.Single "ledger"
+                                   , Sqlite.Single (Just 234)
+                                   , Sqlite.Single (Just 567)
+                                   , Sqlite.Single 0
+                                   , Sqlite.Single 5
+                                   , Sqlite.Single 0
+                                   )
+                               ,
+                                   ( Sqlite.Single "expired"
+                                   , Sqlite.Single (Just 345)
+                                   , Sqlite.Single (Just 678)
+                                   , Sqlite.Single 0
+                                   , Sqlite.Single 6
+                                   , Sqlite.Single 0
+                                   )
                                ]
-                exactBytes <- Sqlite.runSqlite (T.pack dbf)
-                    $ Sqlite.rawSql "SELECT tx FROM dapp_submission ORDER BY status" []
+                exactBytes <-
+                    Sqlite.runSqlite (T.pack dbf)
+                        $ Sqlite.rawSql "SELECT tx FROM dapp_submission ORDER BY status" []
                 exactBytes `shouldBe` replicate 3 (Sqlite.Single fixtureBytes)
-                nullDefaults <- Sqlite.runSqlite (T.pack dbf)
-                    $ Sqlite.rawSql
-                        "SELECT count(*) FROM dapp_submission WHERE broadcast_generation IS NOT NULL OR broadcast_started IS NOT NULL OR rejection_code IS NOT NULL"
-                        []
+                nullDefaults <-
+                    Sqlite.runSqlite (T.pack dbf)
+                        $ Sqlite.rawSql
+                            "SELECT count(*) FROM dapp_submission WHERE broadcast_generation IS NOT NULL OR broadcast_started IS NOT NULL OR rejection_code IS NOT NULL"
+                            []
                 nullDefaults `shouldBe` [Sqlite.Single (0 :: Int)]
-                legacy <- Sqlite.runSqlite (T.pack dbf)
-                    $ Sqlite.rawSql "SELECT count(*) FROM submissions" []
+                legacy <-
+                    Sqlite.runSqlite (T.pack dbf)
+                        $ Sqlite.rawSql "SELECT count(*) FROM submissions" []
                 legacy `shouldBe` [Sqlite.Single (3 :: Int)]
                 BS.readFile (dbf <> ".v5.bak") `shouldReturn` v5
         it

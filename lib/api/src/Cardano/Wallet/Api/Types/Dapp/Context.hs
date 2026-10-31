@@ -1059,7 +1059,7 @@ validateReviewedDappContext hmacKey generation routeWallet request response = do
             , networkMagic
             , genesisHash = ApiDappHex genesis
             } =
-            response.network
+                response.network
         ApiDappProtocolVersion{major, minor} = response.protocolVersion
         ApiDappPendingOverlay{transactions = pending} = response.pendingOverlay
         recordValues =

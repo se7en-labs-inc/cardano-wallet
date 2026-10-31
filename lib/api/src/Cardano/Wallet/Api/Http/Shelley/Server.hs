@@ -358,9 +358,9 @@ import Cardano.Wallet.Api.Http.Shelley.TransactionContext
     , buildReviewedProofInventory
     , configuredNetwork
     , decodeDappTx
+    , requireConwayNodeEra
     , resolveTransactionContext
     , reviewedBatchComplete
-    , requireConwayNodeEra
     , validateTransactionContextResponseForRequest
     )
 import Cardano.Wallet.Api.Types
@@ -506,8 +506,8 @@ import Cardano.Wallet.Api.Types.Certificate
 import Cardano.Wallet.Api.Types.Dapp.Context
     ( ApiDappHex (..)
     , ApiDappTransactionContextRequest (..)
-    , ApiDappVolatileDelta (..)
     , ApiDappTransactionContextResponse (..)
+    , ApiDappVolatileDelta (..)
     , ApiDappWitnessResult (..)
     , ApiDappWitnessSignItem (..)
     , ApiDappWitnessSignRequest (..)
@@ -5939,7 +5939,9 @@ postDappWitnesses ctx (ApiT walletId) request = do
             request.context.network
             (map (.cbor) request.transactions)
     requireFresh worker = do
-        fresh <- liftIO $ resolveTransactionContext ctx worker (ApiT walletId) contextRequest
+        fresh <-
+            liftIO
+                $ resolveTransactionContext ctx worker (ApiT walletId) contextRequest
         current <- either throwE pure fresh
         let reviewed = request.context
         unless

@@ -85,10 +85,11 @@ import Cardano.Balance.Tx.SizeEstimation
     ( TxSkeleton (..)
     , estimateTxSize
     )
+import Cardano.Binary.FixedSizeCodec
+    ( rawDecodeFixedSized
+    )
 import Cardano.Crypto.DSIGN
     ( SignedDSIGN (SignedDSIGN)
-    , rawDeserialiseSigDSIGN
-    , rawDeserialiseVerKeyDSIGN
     , verifySignedDSIGN
     )
 import Cardano.Crypto.Wallet.Types
@@ -3271,8 +3272,8 @@ prop_dappDataSignsExactBytes xprvKey encPwd = ioProperty $ withFastKdfForTesting
                 _ -> False
 
 verifiesDappData :: ByteString -> ByteString -> ByteString -> Bool
-verifiesDappData message public signature = case ( VKey <$> rawDeserialiseVerKeyDSIGN public :: Maybe (VKey Witness)
-                                                 , SignedDSIGN <$> rawDeserialiseSigDSIGN signature
+verifiesDappData message public signature = case ( VKey <$> rawDecodeFixedSized public :: Maybe (VKey Witness)
+                                                 , SignedDSIGN <$> rawDecodeFixedSized signature
                                                  ) of
     (Just (VKey vkey), Just sig) -> verifySignedDSIGN () vkey message sig == Right ()
     _ -> False

@@ -551,11 +551,16 @@ decodeDappTx value@(ApiDappHex bytes) =
   where
     recognizedOlderTx source =
         let encoded = BL.fromStrict source
-        in  isRight (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Shelley))
-                || isRight (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Allegra))
-                || isRight (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Mary))
-                || isRight (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Alonzo))
-                || isRight (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Babbage))
+        in  isRight
+                (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Shelley))
+                || isRight
+                    (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Allegra))
+                || isRight
+                    (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Mary))
+                || isRight
+                    (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Alonzo))
+                || isRight
+                    (deserializeTx encoded :: Either DecoderError (Read.Tx Read.Babbage))
     hasDeprecatedCertificate source = case deserializeTx (BL.fromStrict source)
                                             :: Either DecoderError (Read.Tx Read.Shelley) of
         Right transaction ->

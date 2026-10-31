@@ -56,8 +56,8 @@ import Cardano.Wallet.Api.Http.Shelley.TransactionContext
     , decodeTx
     , dependencySource
     , evaluateObligation
-    , requiredProofs
     , requireConwayNodeEra
+    , requiredProofs
     , scriptProofKinds
     , supportedCertificate
     , validatePendingProvenance

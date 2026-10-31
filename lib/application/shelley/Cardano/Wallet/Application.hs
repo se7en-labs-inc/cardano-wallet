@@ -4,8 +4,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -313,7 +313,9 @@ serveWallet = serveWalletWithNetworkDecorator pure id
 -- | Allow the in-process latency benchmark to time node queries and wallet
 -- database reads. The ordinary server uses undecorated layers.
 serveWalletWithNetworkDecorator
-    :: (NetworkLayer IO (CardanoBlock StandardCrypto) -> IO (NetworkLayer IO (CardanoBlock StandardCrypto)))
+    :: ( NetworkLayer IO (CardanoBlock StandardCrypto)
+         -> IO (NetworkLayer IO (CardanoBlock StandardCrypto))
+       )
     -> (forall s. DBFactory IO s -> DBFactory IO s)
     -> BlockchainSource
     -> NetworkParameters
@@ -333,7 +335,9 @@ serveWalletWithNetworkDecorator
     -> Block
     -> (URI -> IO ())
     -> IO ExitCode
-serveWalletWithNetworkDecorator decorateNetwork decorateDatabase
+serveWalletWithNetworkDecorator
+    decorateNetwork
+    decorateDatabase
     blockchainSource
     netParams@NetworkParameters
         { protocolParameters

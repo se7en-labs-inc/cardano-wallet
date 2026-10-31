@@ -389,7 +389,7 @@ prop_singleReceivingAddress =
                 > length (pendingIxsToList $ pendingChangeIxs onState)
         ]
   where
-    mkAddress k reward = delegationAddress SMainnet k reward
+    mkAddress = delegationAddress SMainnet
     s0 :: SeqState 'Mainnet ShelleyKey
     s0 =
         SeqState

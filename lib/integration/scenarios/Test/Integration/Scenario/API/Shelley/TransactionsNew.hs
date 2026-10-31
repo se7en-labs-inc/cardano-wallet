@@ -473,7 +473,7 @@ singleReceivingPath =
     NE.fromList
         $ map
             (ApiT . DerivationIndex)
-            [0x8000073C, 0x80000717, 0x80000000, 0, 0]
+            [0x8000_073C, 0x8000_0717, 0x8000_0000, 0, 0]
 
 spec :: forall n. HasSNetworkId n => SpecWith Context
 spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do

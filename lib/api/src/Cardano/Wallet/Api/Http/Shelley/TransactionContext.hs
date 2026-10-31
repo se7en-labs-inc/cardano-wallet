@@ -312,7 +312,7 @@ import Data.ByteString.Lazy qualified as BL
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
-import Data.Text.Encoding qualified as Text
+import Data.Text.Encoding qualified as T
 
 data DecodedTx = DecodedTx
     { bytes :: !ByteString
@@ -702,7 +702,7 @@ assemble
                         <> requiredRecords
             point = toApiPoint capture.point
             walletText = toText wid
-            walletBytes = Text.encodeUtf8 walletText
+            walletBytes = T.encodeUtf8 walletText
             genesisBytes = getApiDappHex configured.genesisHash
             ContextClock{walletGeneration, pendingGeneration} = capture.clock
         records <-

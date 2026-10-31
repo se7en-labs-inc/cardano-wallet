@@ -313,8 +313,8 @@ spec = describe "Logging Middleware" $ do
         Right (p, socket) -> do
             logSettings <-
                 newApiLoggerSettings
-                    <&> obfuscateKeys (`seq` ["sensitive"])
                     <&> suppressDetails isTransactionContext
+                        . obfuscateKeys (`seq` ["sensitive"])
             let warpSettings =
                     Warp.defaultSettings
                         & setBeforeMainLoop (cb (Right p))

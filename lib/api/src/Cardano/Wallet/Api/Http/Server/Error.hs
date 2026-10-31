@@ -256,7 +256,7 @@ dappServerError = \case
     DappUnsupportedEraError ->
         fixed err403 DappUnsupportedEra "Unsupported backend era"
   where
-    fixed status info message = apiError status info message
+    fixed = apiError
 
 instance IsServerError WalletException where
     toServerError = \case

@@ -1,7 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -351,6 +350,7 @@ import Numeric.Natural
 import Test.Hspec
     ( SpecWith
     , describe
+    , expectationFailure
     , pendingWith
     , shouldContain
     , shouldNotContain
@@ -1097,13 +1097,15 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                 liftIO $ decodeSealed $ getApiT balancedSealed
             let LedgerTx.Tx balancedLedgerTx = balancedTx
                 balancedOutputs = toList $ balancedLedgerTx ^. bodyTxL . outputsTxBodyL
-            liftIO $ do
-                view referenceScriptTxOutL (balancedOutputs !! 0)
-                    `shouldNotBe` SNothing
-                view datumTxOutL (balancedOutputs !! 1)
-                    `shouldBe` DatumHash (hashBinaryData datum)
-                view datumTxOutL (balancedOutputs !! 2)
-                    `shouldBe` Datum datum
+            liftIO $ case balancedOutputs of
+                referenceOutput : hashOutput : inlineOutput : _ -> do
+                    view referenceScriptTxOutL referenceOutput
+                        `shouldNotBe` SNothing
+                    view datumTxOutL hashOutput
+                        `shouldBe` DatumHash (hashBinaryData datum)
+                    view datumTxOutL inlineOutput
+                        `shouldBe` Datum datum
+                _ -> expectationFailure "expected three balanced outputs"
 
             signed <-
                 signTx
@@ -1252,7 +1254,7 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                                 credentialKind == PolicyCredential
                                     && ownership == OwnedKey
                                     && derivationPath
-                                        == [0x8000073f, 0x80000717, 0x80000000]
+                                        == [0x8000_073f, 0x8000_0717, 0x8000_0000]
                                     && PolicyProof `elem` proofKinds
                         )
                 hasRequiredPolicy =

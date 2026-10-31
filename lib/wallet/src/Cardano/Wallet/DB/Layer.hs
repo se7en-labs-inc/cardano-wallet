@@ -9,6 +9,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -460,7 +461,7 @@ decorateDBLayer incarnation clock DBLayer{..} =
         , atomicallyReadContext = \action ->
             withMVar clock $ \current -> do
                 ensureCurrent current
-                (\result -> (result, current)) <$> atomically action
+                (,current) <$> atomically action
         , ..
         }
   where

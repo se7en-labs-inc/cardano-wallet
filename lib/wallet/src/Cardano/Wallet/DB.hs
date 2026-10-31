@@ -6,6 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -518,8 +519,8 @@ mkDBLayerFromParts ti wid_ DBLayerCollection{..} =
             claimDurableSubmissionAttempt_ durableSubmissions_
         , readDurableSubmissions = readDurableSubmissions_ durableSubmissions_
         , atomicallyWithContextChange = const atomically_
-        , atomicallyReadContext = \action ->
-            (\result -> (result, ContextClock 0 0 0 False)) <$> atomically_ action
+        , atomicallyReadContext =
+            fmap (,ContextClock 0 0 0 False) . atomically_
         }
   where
     withSubmissions :: forall a. (TxSubmissions -> stm a) -> stm a

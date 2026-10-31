@@ -444,7 +444,7 @@ instance FromJSON ApiDappWitnessSignRequest where
         result@ApiDappWitnessSignRequest{revision, transactions} <-
             genericParseJSON strictRecordTypeOptions value
         unless (revision == 1) $ fail "revision must be 1"
-        unless (length transactions >= 1 && length transactions <= 50)
+        unless (not (null transactions) && length transactions <= 50)
             $ fail "transactions must contain 1 to 50 entries"
         pure result
 
@@ -469,7 +469,7 @@ instance FromJSON ApiDappWitnessSignResponse where
         result@ApiDappWitnessSignResponse{revision, witnesses} <-
             genericParseJSON strictRecordTypeOptions value
         unless (revision == 1) $ fail "revision must be 1"
-        unless (length witnesses >= 1 && length witnesses <= 50)
+        unless (not (null witnesses) && length witnesses <= 50)
             $ fail "witnesses must contain 1 to 50 entries"
         unless
             ( map

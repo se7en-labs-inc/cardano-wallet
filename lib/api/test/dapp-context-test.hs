@@ -167,7 +167,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Maybe.Strict as Strict
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
-import qualified Data.Text as Text
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 main :: IO ()
@@ -637,7 +637,7 @@ witnessItem :: ApiDappWitnessSignItem
 witnessItem = ApiDappWitnessSignItem (ApiDappHex "\xa0") True
 
 dappWalletId :: Text
-dappWalletId = Text.replicate 40 "a"
+dappWalletId = T.replicate 40 "a"
 
 dappNetwork :: ApiDappContextNetwork
 dappNetwork = ApiDappContextNetwork 0 1 (ApiDappHex $ BS.replicate 32 0)

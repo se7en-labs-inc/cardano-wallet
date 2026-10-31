@@ -2520,8 +2520,8 @@ signDappWitnesses root userPwd body candidates =
                             /= expectedHash
                             then pure $ Right $ Left "candidate key hash mismatch"
                             else
-                                fmap Right
-                                    $ mkDappVKeyWitnessFromExtKeyMaterial
+                                Right
+                                    <$> mkDappVKeyWitnessFromExtKeyMaterial
                                         Write.RecentEraConway
                                         body
                                         material

@@ -3159,12 +3159,12 @@ prop_dappVKeyWitnessesMatch xprvKey encPwd = ioProperty $ withFastKdfForTesting 
     case ekeyE of
         Left _ -> pure False
         Right ekey -> do
-            actual <- withDecryptedExtKeyMaterial ekey (mempty :: BS.ByteString) $ \km ->
-                fmap Right
-                    $ mkDappVKeyWitnessFromExtKeyMaterial
-                        RecentEraConway
-                        minimalConwayTxBody
-                        km
+            actual <-
+                withDecryptedExtKeyMaterial ekey (mempty :: BS.ByteString)
+                    $ fmap Right
+                        . mkDappVKeyWitnessFromExtKeyMaterial
+                            RecentEraConway
+                            minimalConwayTxBody
             pure $ case (expected, actual) of
                 (Right v1, Right (Right v2)) ->
                     v1 == v2
@@ -3198,7 +3198,7 @@ prop_dappVKeyWitnessRejectsHashMismatch xprvKey encPwd =
                 userPwd
                 minimalConwayTxBody
                 [
-                    ( [0x8000073c, 0x80000717, 0x80000000, 0, 0]
+                    ( [0x8000_073c, 0x8000_0717, 0x8000_0000, 0, 0]
                     , BS.replicate 28 0
                     )
                 ]

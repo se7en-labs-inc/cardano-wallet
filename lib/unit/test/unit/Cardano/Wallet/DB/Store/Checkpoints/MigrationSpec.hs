@@ -101,22 +101,26 @@ spec = do
                 (Proxy :: Proxy (RndState 'Mainnet))
                 "api-bench/rnd.423b423718660431ebfe9c761cd72e64ee5065ac.sqlite"
 
-
     describe "migrateSingleAddressMode :: Migration _ 6 7" $ do
-        it "enables Shelley account 0 once and preserves controls" $
-            withSystemTempFile "single-address-mode.sqlite" $ \path handle -> do
+        it "enables Shelley account 0 once and preserves controls"
+            $ withSystemTempFile "single-address-mode.sqlite"
+            $ \path handle -> do
                 hClose handle
                 removeFile path
                 conn <- Sqlite.open $ T.pack path
-                execute conn
+                execute
+                    conn
                     "CREATE TABLE database_schema_version \
                     \(name TEXT PRIMARY KEY, version INTEGER NOT NULL)"
-                execute conn
+                execute
+                    conn
                     "INSERT INTO database_schema_version VALUES ('schema', 6)"
-                execute conn
+                execute
+                    conn
                     "CREATE TABLE seq_state \
                     \(derivation_prefix TEXT NOT NULL, change_addr_mode TEXT NOT NULL)"
-                mapM_ (execute conn)
+                mapM_
+                    (execute conn)
                     [ "INSERT INTO seq_state VALUES \
                       \('2147485500/2147485463/2147483648', 'single')"
                     , "INSERT INTO seq_state VALUES \
@@ -131,15 +135,18 @@ spec = do
                     path
                     migrateSingleAddressMode
                 conn' <- Sqlite.open $ T.pack path
-                rows <- query conn'
-                    "SELECT derivation_prefix, change_addr_mode FROM seq_state ORDER BY rowid"
-                rows `shouldBe`
-                    [ [PersistText shelleyPrefix, PersistText "single_receiving"]
-                    , [PersistText shelleyPrefix, PersistText "single_receiving"]
-                    , [PersistText "byron", PersistText "increasing"]
-                    , [PersistText shelleyPrefix, PersistText "corrupt"]
-                    ]
-                execute conn'
+                rows <-
+                    query
+                        conn'
+                        "SELECT derivation_prefix, change_addr_mode FROM seq_state ORDER BY rowid"
+                rows
+                    `shouldBe` [ [PersistText shelleyPrefix, PersistText "single_receiving"]
+                               , [PersistText shelleyPrefix, PersistText "single_receiving"]
+                               , [PersistText "byron", PersistText "increasing"]
+                               , [PersistText shelleyPrefix, PersistText "corrupt"]
+                               ]
+                execute
+                    conn'
                     "UPDATE seq_state SET change_addr_mode = 'increasing' WHERE rowid = 1"
                 Sqlite.close conn'
                 runMigrations
@@ -151,8 +158,9 @@ spec = do
                     query conn'' "SELECT change_addr_mode FROM seq_state WHERE rowid = 1"
                 persistedOff `shouldBe` "increasing"
                 Sqlite.close conn''
-          where
-            shelleyPrefix = "2147485500/2147485463/2147483648"
+  where
+    shelleyPrefix = "2147485500/2147485463/2147483648"
+
 -- | Test that the 'Store' can load the database after migration.
 testCanLoadAfterMigration
     :: forall s
@@ -188,9 +196,10 @@ withCopiedFile orig action =
 query :: Sqlite.Connection -> T.Text -> IO [[PersistValue]]
 query conn sql = do
     statement <- Sqlite.prepare conn sql
-    let collect rows = Sqlite.step statement >>= \case
-            Sqlite.Row -> Sqlite.columns statement >>= \row -> collect (row : rows)
-            Sqlite.Done -> pure $ reverse rows
+    let collect rows =
+            Sqlite.step statement >>= \case
+                Sqlite.Row -> Sqlite.columns statement >>= \row -> collect (row : rows)
+                Sqlite.Done -> pure $ reverse rows
     rows <- collect []
     Sqlite.finalize statement
     pure rows

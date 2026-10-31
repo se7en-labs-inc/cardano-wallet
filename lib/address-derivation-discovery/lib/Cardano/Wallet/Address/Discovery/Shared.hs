@@ -589,7 +589,8 @@ instance GenChange (SharedState n k) where
                         IncreasingChangeAddresses ->
                             nextChangeIndex (getPool intPool) pending
                         SingleReceivingAddress ->
-                            error "Single receiving address mode is not supported for shared wallets"
+                            error
+                                "Single receiving address mode is not supported for shared wallets"
                 addr = mkAddress (paymentTemplate st) (delegationTemplate st) ix
             in  ( addr
                 , st{ready = Active (SharedAddressPools extPool intPool pending')}

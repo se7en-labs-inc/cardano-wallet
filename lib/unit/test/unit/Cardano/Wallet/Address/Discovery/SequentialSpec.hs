@@ -372,15 +372,18 @@ prop_changeNoLock (s0, ix) =
     (_, s') = isOurs addr s
     (ys, _) = changeAddresses [] s'
 
-
 prop_singleReceivingAddress :: Property
 prop_singleReceivingAddress =
     conjoin
         [ ShowFmt canonical === ShowFmt expected
         , pendingIxsToList (pendingChangeIxs onState)
             === pendingIxsToList (pendingChangeIxs reserved)
-        , property $ isJust $ fst $ isOurs canonical
-            (onState :: SeqState 'Mainnet ShelleyKey)
+        , property
+            $ isJust
+            $ fst
+            $ isOurs
+                canonical
+                (onState :: SeqState 'Mainnet ShelleyKey)
         , property
             $ length (pendingIxsToList $ pendingChangeIxs offState)
                 > length (pendingIxsToList $ pendingChangeIxs onState)
@@ -390,8 +393,14 @@ prop_singleReceivingAddress =
     s0 :: SeqState 'Mainnet ShelleyKey
     s0 =
         SeqState
-            (newSeqAddressPool @'Mainnet @'UtxoInternal ourAccount defaultAddressPoolGap)
-            (newSeqAddressPool @'Mainnet @'UtxoExternal ourAccount defaultAddressPoolGap)
+            ( newSeqAddressPool @'Mainnet @'UtxoInternal
+                ourAccount
+                defaultAddressPoolGap
+            )
+            ( newSeqAddressPool @'Mainnet @'UtxoExternal
+                ourAccount
+                defaultAddressPoolGap
+            )
             emptyPendingIxs
             ourAccount
             Nothing
@@ -399,13 +408,19 @@ prop_singleReceivingAddress =
             defaultPrefix
             SingleChangeAddress
     (_, reserved) = genChange mkAddress s0
-    expected = delegationAddress SMainnet
-        (deriveAddressPublicKey ourAccount UtxoExternal minBound)
-        rewardAccount
+    expected =
+        delegationAddress
+            SMainnet
+            (deriveAddressPublicKey ourAccount UtxoExternal minBound)
+            rewardAccount
     (canonical, onState) =
-        genChange mkAddress reserved{changeAddressMode = SingleReceivingAddress}
+        genChange
+            mkAddress
+            reserved{changeAddressMode = SingleReceivingAddress}
     (_, offState) =
-        genChange mkAddress onState{changeAddressMode = IncreasingChangeAddresses}
+        genChange
+            mkAddress
+            onState{changeAddressMode = IncreasingChangeAddresses}
 prop_lookupDiscovered
     :: (SeqState 'Mainnet ShelleyKey, Address)
     -> Property

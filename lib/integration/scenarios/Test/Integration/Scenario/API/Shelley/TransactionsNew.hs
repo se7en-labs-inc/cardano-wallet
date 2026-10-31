@@ -416,9 +416,9 @@ import Test.Integration.Framework.DSL
     , waitForTxImmutability
     , waitNumberOfEpochBoundaries
     , walletId
-    , (</>)
     , (.<)
     , (.>)
+    , (</>)
     )
 import UnliftIO.Directory
     ( renameFile
@@ -524,8 +524,8 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                     expectResponseCode HTTP.status202 response
                     pure $ getFromResponse #id response
                 waitForTransaction wallet txid =
-                    eventually "Transaction is discovered" $
-                        request @(ApiTransaction n)
+                    eventually "Transaction is discovered"
+                        $ request @(ApiTransaction n)
                             ctx
                             (Link.getTransaction @'Shelley wallet (ApiTxId txid))
                             Default
@@ -537,7 +537,7 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                             ctx
                             (Link.createUnsignedTransaction @'Shelley wa)
                             Default
-                            (Json
+                            ( Json
                                 [json|{
                                     "payments": [{
                                         "address": #{destination},
@@ -608,8 +608,9 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                 changeOutputs =
                     getFromResponse (#coinSelection . #change) spendingBoth
             selectedPaths
-                `shouldSatisfy` (Set.fromList [internalZeroPath, externalOnePath]
-                    `Set.isSubsetOf`)
+                `shouldSatisfy` ( Set.fromList [internalZeroPath, externalOnePath]
+                                    `Set.isSubsetOf`
+                                )
             changeOutputs `shouldSatisfy` (not . null)
             changeOutputs
                 `shouldSatisfy` all
@@ -659,7 +660,7 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                 ctx
                 walletUrl
                 Default
-                (Json
+                ( Json
                     [json|{
                         "name": "must-not-be-applied",
                         "single_address_mode": true,
@@ -1064,8 +1065,9 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
             , expectField (#coinSelection . #withdrawals) (`shouldSatisfy` null)
             , expectField
                 (#coinSelection . #change)
-                (`shouldSatisfy` all
-                    ((== singleReceivingPath) . (^. #derivationPath))
+                ( `shouldSatisfy`
+                    all
+                        ((== singleReceivingPath) . (^. #derivationPath))
                 )
             ]
         let expectedFee = getFromResponse (#fee . #toNatural) rTx
@@ -6063,8 +6065,9 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                 [ expectResponseCode HTTP.status202
                 , expectField
                     (#coinSelection . #change)
-                    (`shouldSatisfy` all
-                        ((== singleReceivingPath) . (^. #derivationPath))
+                    ( `shouldSatisfy`
+                        all
+                            ((== singleReceivingPath) . (^. #derivationPath))
                     )
                 ]
             let ApiSerialisedTransaction apiTx2 _ = getFromResponse #transaction rTx2

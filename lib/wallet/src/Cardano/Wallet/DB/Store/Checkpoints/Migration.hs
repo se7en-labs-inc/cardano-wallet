@@ -22,15 +22,15 @@ import Cardano.Wallet.DB.Migration
     ( Migration
     , mkMigration
     )
-import Control.Exception
-    ( onException
-    )
 import Cardano.Wallet.DB.Sqlite.Migration.Old
     ( SqlColumnStatus (..)
     , isFieldPresent
     )
 import Cardano.Wallet.DB.Sqlite.Schema
     ( EntityField (..)
+    )
+import Control.Exception
+    ( onException
     )
 import Control.Monad
     ( void
@@ -72,12 +72,15 @@ migrateSingleAddressMode = mkMigration $ ReaderT $ \db -> do
                 TableMissing -> pure ()
                 ColumnMissing ->
                     fail "Expected seq_state.change_addr_mode to exist."
-                ColumnPresent -> execute conn
-                    "UPDATE seq_state \
-                    \SET change_addr_mode = 'single_receiving' \
-                    \WHERE derivation_prefix = '2147485500/2147485463/2147483648' \
-                    \AND change_addr_mode IN ('single', 'increasing')"
-            execute conn
+                ColumnPresent ->
+                    execute
+                        conn
+                        "UPDATE seq_state \
+                        \SET change_addr_mode = 'single_receiving' \
+                        \WHERE derivation_prefix = '2147485500/2147485463/2147483648' \
+                        \AND change_addr_mode IN ('single', 'increasing')"
+            execute
+                conn
                 "UPDATE database_schema_version SET version = 7 WHERE name = 'schema'"
             execute conn "COMMIT"
     migration `onException` execute conn "ROLLBACK"

@@ -2147,11 +2147,14 @@ putWallet ctx mkApiWallet (ApiT wid) body = do
     rejectConflictingChangeModes body
     case walletFlavor @s of
         ShelleyWallet -> return ()
-        _ -> when (isJust $ body ^. #singleAddressMode)
-            $ Handler
-            $ throwE
-            $ apiError err400 BadRequest
-                "single_address_mode is supported only for Shelley wallets."
+        _ ->
+            when (isJust $ body ^. #singleAddressMode)
+                $ Handler
+                $ throwE
+                $ apiError
+                    err400
+                    BadRequest
+                    "single_address_mode is supported only for Shelley wallets."
     case body ^. #name of
         Nothing ->
             return ()
@@ -2190,10 +2193,14 @@ rejectConflictingChangeModes
     -> Handler ()
 rejectConflictingChangeModes body =
     when
-        (isJust (body ^. #singleAddressMode) && isJust (body ^. #oneChangeAddressMode))
+        ( isJust (body ^. #singleAddressMode)
+            && isJust (body ^. #oneChangeAddressMode)
+        )
         $ Handler
         $ throwE
-        $ apiError err400 BadRequest
+        $ apiError
+            err400
+            BadRequest
             "Specify either single_address_mode or one_change_address_mode, not both."
 
 putWalletPassphrase

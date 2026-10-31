@@ -303,57 +303,60 @@ main = hspec $ do
                     `shouldBe` Left InvalidDappRequest
         describe "DAPP_DATA_SIGNING address dispatch and COSE" $ do
             it
-                "selects payment credentials for base, enterprise, and pointer addresses" $ do
-                mapM_
-                    ( \raw ->
-                        validateDataSignRequest dappNetwork (dataSignRequest raw)
-                            `shouldBe` Right (PaymentCredential, KeyDataCredential dataCredential, raw)
-                    )
-                    [ BS.pack (0x00 : BS.unpack dataCredential <> replicate 28 0xbb)
-                    , enterpriseAddress
-                    , BS.pack (0x40 : BS.unpack dataCredential <> [0, 0, 0])
-                    ]
+                "selects payment credentials for base, enterprise, and pointer addresses"
+                $ do
+                    mapM_
+                        ( \raw ->
+                            validateDataSignRequest dappNetwork (dataSignRequest raw)
+                                `shouldBe` Right (PaymentCredential, KeyDataCredential dataCredential, raw)
+                        )
+                        [ BS.pack (0x00 : BS.unpack dataCredential <> replicate 28 0xbb)
+                        , enterpriseAddress
+                        , BS.pack (0x40 : BS.unpack dataCredential <> [0, 0, 0])
+                        ]
             it "selects the stake credential for reward addresses"
                 $ validateDataSignRequest dappNetwork (dataSignRequest rewardAddress)
                 `shouldBe` Right
                     (StakeCredential, KeyDataCredential dataCredential, rewardAddress)
             it
-                "classifies script credentials without falling through to proof generation" $ do
-                validateDataSignRequest
-                    dappNetwork
-                    (dataSignRequest scriptPaymentAddress)
-                    `shouldBe` Right (PaymentCredential, ScriptDataCredential, scriptPaymentAddress)
-                validateDataSignRequest
-                    dappNetwork
-                    (dataSignRequest scriptStakeAddress)
-                    `shouldBe` Right (StakeCredential, ScriptDataCredential, scriptStakeAddress)
+                "classifies script credentials without falling through to proof generation"
+                $ do
+                    validateDataSignRequest
+                        dappNetwork
+                        (dataSignRequest scriptPaymentAddress)
+                        `shouldBe` Right (PaymentCredential, ScriptDataCredential, scriptPaymentAddress)
+                    validateDataSignRequest
+                        dappNetwork
+                        (dataSignRequest scriptStakeAddress)
+                        `shouldBe` Right (StakeCredential, ScriptDataCredential, scriptStakeAddress)
             it
-                "constructs exact untagged COSE bytes over the raw address and non-UTF8 payload" $ do
-                let protected = encodeProtectedDataAddress enterpriseAddress
-                    signatureStructure = encodeSignatureStructure protected nonUtf8Payload
-                    publicKey = BS.replicate 32 0x42
-                    keyHash = Blake.blake2b224 publicKey
-                response <- case mkDappDataSignResponse
-                    PaymentCredential
-                    keyHash
-                    enterpriseAddress
-                    nonUtf8Payload
-                    protected
-                    signatureStructure
-                    (publicKey, BS.replicate 64 0x11) of
-                    Left err -> error err
-                    Right value -> pure value
-                response.credential `shouldBe` ApiDappHex keyHash
-                response.coseSign1
-                    `shouldBe` ApiDappHex
-                        ( hex
-                            "84582aa201276761646472657373581d60aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa266686173686564f46776657273696f6e014400ff8041584011111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
-                        )
-                response.coseKey
-                    `shouldBe` ApiDappHex
-                        ( hex
-                            "a40101032720062158204242424242424242424242424242424242424242424242424242424242424242"
-                        )
+                "constructs exact untagged COSE bytes over the raw address and non-UTF8 payload"
+                $ do
+                    let protected = encodeProtectedDataAddress enterpriseAddress
+                        signatureStructure = encodeSignatureStructure protected nonUtf8Payload
+                        publicKey = BS.replicate 32 0x42
+                        keyHash = Blake.blake2b224 publicKey
+                    response <- case mkDappDataSignResponse
+                        PaymentCredential
+                        keyHash
+                        enterpriseAddress
+                        nonUtf8Payload
+                        protected
+                        signatureStructure
+                        (publicKey, BS.replicate 64 0x11) of
+                        Left err -> error err
+                        Right value -> pure value
+                    response.credential `shouldBe` ApiDappHex keyHash
+                    response.coseSign1
+                        `shouldBe` ApiDappHex
+                            ( hex
+                                "84582aa201276761646472657373581d60aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa266686173686564f46776657273696f6e014400ff8041584011111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+                            )
+                    response.coseKey
+                        `shouldBe` ApiDappHex
+                            ( hex
+                                "a40101032720062158204242424242424242424242424242424242424242424242424242424242424242"
+                            )
 
         it "serializes fixed redacted dapp witness errors" $ do
             let errors =

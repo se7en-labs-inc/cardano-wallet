@@ -39,7 +39,6 @@ library
     , bech32-th
     , binary
     , bytestring
-    , cborg
     , cardano-addresses
     , cardano-api
     , cardano-balance-tx
@@ -61,6 +60,7 @@ library
     , cardano-wallet-read
     , cardano-wallet-secrets
     , cardano-wallet-tracing
+    , cborg
     , containers
     , contra-tracer
     , crypto-primitives

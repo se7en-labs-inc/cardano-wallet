@@ -45,12 +45,12 @@ library
     , cardano-binary
     , cardano-crypto
     , cardano-crypto-class
-    , cardano-ledger-api
-    , cardano-ledger-alonzo
     , cardano-ledger-allegra
+    , cardano-ledger-alonzo
+    , cardano-ledger-api
     , cardano-ledger-binary
-    , cardano-ledger-core
     , cardano-ledger-conway
+    , cardano-ledger-core
     , cardano-ledger-mary
     , cardano-ledger-read
     , cardano-wallet
@@ -138,11 +138,11 @@ library
   other-modules:   Paths_cardano_wallet_api
 
 test-suite dapp-context
-  import:             language
-  type:               exitcode-stdio-1.0
-  hs-source-dirs:     test
-  main-is:            dapp-context-test.hs
-  ghc-options:        -Wall
+  import:         language
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        dapp-context-test.hs
+  ghc-options:    -Wall
   build-depends:
     , address-derivation-discovery
     , aeson
@@ -151,12 +151,12 @@ test-suite dapp-context
     , bytestring
     , cardano-crypto-class
     , cardano-ledger-allegra
-    , cardano-ledger-core
     , cardano-ledger-conway
+    , cardano-ledger-core
     , cardano-ledger-read
     , cardano-strict-containers
-    , cardano-wallet-api
     , cardano-wallet
+    , cardano-wallet-api
     , cardano-wallet-primitive
     , cardano-wallet-read
     , cardano-wallet-secrets

@@ -807,23 +807,23 @@ encodeContextRecord =
             , derivationPath
             , proofKinds
             } -> do
-            requireByteLength "credential" 28 credential
-            unless ((ownership == OwnedKey) == not (null derivationPath))
-                $ Left "invalid ownership path"
-            when (ownership == OwnedKey)
-                $ unless (validPath credentialKind derivationPath)
-                $ Left "invalid derivation path"
-            requireCanonicalSubsetAllowEmpty
-                "proof kinds"
-                proofKindOrder
-                proofKinds
-            pure $ record 0x02 $ do
-                putWord8 $ credentialKindCode credentialKind
-                putBytes credential
-                putWord8 $ ownershipCode ownership
-                putWord32be $ fromIntegral $ length derivationPath
-                mapM_ putWord32be derivationPath
-                putWord32be $ sum $ proofBit <$> proofKinds
+                requireByteLength "credential" 28 credential
+                unless ((ownership == OwnedKey) == not (null derivationPath))
+                    $ Left "invalid ownership path"
+                when (ownership == OwnedKey)
+                    $ unless (validPath credentialKind derivationPath)
+                    $ Left "invalid derivation path"
+                requireCanonicalSubsetAllowEmpty
+                    "proof kinds"
+                    proofKindOrder
+                    proofKinds
+                pure $ record 0x02 $ do
+                    putWord8 $ credentialKindCode credentialKind
+                    putBytes credential
+                    putWord8 $ ownershipCode ownership
+                    putWord32be $ fromIntegral $ length derivationPath
+                    mapM_ putWord32be derivationPath
+                    putWord32be $ sum $ proofBit <$> proofKinds
         ProtocolRecord
             { networkId
             , networkMagic
@@ -868,13 +868,13 @@ encodeContextRecord =
             , credential
             , required
             } -> do
-            requireByteLength "credential" 28 credential
-            pure $ record 0x06 $ do
-                putWord32be transactionIndex
-                putWord8 $ proofKindCode proofKind
-                putWord8 $ credentialKindCode credentialKind
-                putBytes credential
-                putBool required
+                requireByteLength "credential" 28 credential
+                pure $ record 0x06 $ do
+                    putWord32be transactionIndex
+                    putWord8 $ proofKindCode proofKind
+                    putWord8 $ credentialKindCode credentialKind
+                    putBytes credential
+                    putBool required
 
 canonicalContextRecords
     :: [ContextRecord] -> Either String [ByteString]
@@ -1051,34 +1051,36 @@ outputRecordValue
             sourceTransactionOutputCbor
 
 ownershipRecordValue :: ApiDappOwnership -> ContextRecord
-ownershipRecordValue ApiDappOwnership
-                        { credentialKind
-                        , credential = ApiDappHex credential
-                        , ownership
-                        , derivationPath
-                        , proofKinds
-                        } =
-    OwnershipRecord
-        credentialKind
-        credential
-        ownership
-        derivationPath
-        proofKinds
+ownershipRecordValue
+    ApiDappOwnership
+        { credentialKind
+        , credential = ApiDappHex credential
+        , ownership
+        , derivationPath
+        , proofKinds
+        } =
+        OwnershipRecord
+            credentialKind
+            credential
+            ownership
+            derivationPath
+            proofKinds
 
 requiredRecordValue :: ApiDappRequiredWalletProof -> ContextRecord
-requiredRecordValue ApiDappRequiredWalletProof
-                        { transactionIndex
-                        , proofKind
-                        , credentialKind
-                        , credential = ApiDappHex credential
-                        , required
-                        } =
-    RequiredProofRecord
-        transactionIndex
-        proofKind
-        credentialKind
-        credential
-        required
+requiredRecordValue
+    ApiDappRequiredWalletProof
+        { transactionIndex
+        , proofKind
+        , credentialKind
+        , credential = ApiDappHex credential
+        , required
+        } =
+        RequiredProofRecord
+            transactionIndex
+            proofKind
+            credentialKind
+            credential
+            required
 
 walletIdBytes :: ContextTokenClaims -> ByteString
 walletIdBytes ContextTokenClaims{walletId} = walletId
